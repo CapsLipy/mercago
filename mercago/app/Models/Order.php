@@ -5,34 +5,36 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Product extends Model
+class Order extends Model
 {
     use HasUuids;
 
     public $incrementing = false;
-
     protected $keyType = 'string';
 
     protected $fillable = [
-        'product_name',
-        'category',
-        'price',
-        'unit',
-        'stock_qty',
+        'shopper_id',
         'vendor_id',
-        'image',
+        'rider_id',
+        'total_amount',
+        'status',
+        'delivery_status',
     ];
 
-    protected $appends = ['image_url'];
-
-    public function getImageUrlAttribute()
+    public function shopper(): BelongsTo
     {
-        return $this->image ? asset('storage/' . $this->image) : null;
+        return $this->belongsTo(User::class, 'shopper_id');
     }
 
     public function vendor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'vendor_id');
+    }
+
+    public function items(): HasMany
+    {
+        return $this->hasMany(OrderItem::class);
     }
 }

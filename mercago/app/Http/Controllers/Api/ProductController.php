@@ -8,9 +8,12 @@ use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $products = Product::latest()->get();
+        // Only return products that belong to the currently authenticated vendor.
+        $products = Product::where('vendor_id', $request->user()->id)
+            ->latest()
+            ->get();
 
         return response()->json($products);
     }
@@ -23,9 +26,14 @@ class ProductController extends Controller
             'price' => ['required', 'numeric', 'min:0'],
             'unit' => ['required', 'string', 'max:50'],
             'stock_qty' => ['required', 'integer', 'min:0'],
+            'image' => ['nullable', 'image', 'max:5120'],
         ]);
 
         $validated['vendor_id'] = (string) $request->user()->id;
+
+        if ($request->hasFile('image')) {
+            $validated['image'] = $request->file('image')->store('products', 'public');
+        }
 
         $product = Product::create($validated);
 
@@ -51,7 +59,13 @@ class ProductController extends Controller
             'price' => ['sometimes', 'required', 'numeric', 'min:0'],
             'unit' => ['sometimes', 'required', 'string', 'max:50'],
             'stock_qty' => ['sometimes', 'required', 'integer', 'min:0'],
+            'image' => ['nullable', 'image', 'max:5120'],
         ]);
+
+        if ($request->hasFile('image')) {
+            // Optional: delete old image if needed, but for now we just overwrite the DB field
+            $validated['image'] = $request->file('image')->store('products', 'public');
+        }
 
         $product->update($validated);
 
