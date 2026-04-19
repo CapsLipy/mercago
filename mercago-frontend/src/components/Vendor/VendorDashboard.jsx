@@ -1,7 +1,32 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { API_BASE_URL } from '../../config'
 import { extractError } from '../../utils/error'
 import StatusBadge from '../UI/StatusBadge'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler,
+} from 'chart.js'
+import { Line, Bar } from 'react-chartjs-2'
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  Filler
+)
 
 const emptyProductForm = {
   product_name: '',
@@ -13,6 +38,8 @@ const emptyProductForm = {
 }
 
 function VendorAnalytics({ vendorOrders }) {
+  const [chartView, setChartView] = useState('sales') // 'sales' | 'products'
+
   // Aggregate stats
   const totalOrders = vendorOrders.length
   let totalRevenue = 0
@@ -36,7 +63,6 @@ function VendorAnalytics({ vendorOrders }) {
 
   // Sort dates chronological
   const sortedDates = Object.keys(salesByDate).sort()
-  const maxDailySales = sortedDates.length > 0 ? Math.max(...Object.values(salesByDate)) : 100
 
   // Top Products
   const productTally = {}
@@ -50,7 +76,137 @@ function VendorAnalytics({ vendorOrders }) {
   })
   const topProducts = Object.entries(productTally)
     .sort((a, b) => b[1].qty - a[1].qty)
-    .slice(0, 5)
+    .slice(0, 8)
+
+  // ── Chart Data: Sales Line Chart ──
+  const salesLineData = {
+    labels: sortedDates.slice(-14).map(d => {
+      const parts = d.split('-')
+      return `${parts[1]}-${parts[2]}`
+    }),
+    datasets: [
+      {
+        label: 'Revenue (₱)',
+        data: sortedDates.slice(-14).map(d => salesByDate[d]),
+        borderColor: '#3b82f6',
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        borderWidth: 2.5,
+        pointBackgroundColor: '#3b82f6',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        tension: 0.35,
+        fill: true,
+      },
+    ],
+  }
+
+  const salesLineOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#1e293b',
+        titleFont: { size: 13, weight: '600' },
+        bodyFont: { size: 12 },
+        padding: 12,
+        cornerRadius: 8,
+        callbacks: {
+          label: (ctx) => `₱${ctx.parsed.y.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+        },
+      },
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: { color: '#9ca3af', font: { size: 12 } },
+      },
+      y: {
+        beginAtZero: true,
+        grid: { color: 'rgba(0,0,0,0.04)' },
+        ticks: {
+          color: '#9ca3af',
+          font: { size: 12 },
+          callback: (v) => `₱${v.toLocaleString()}`,
+        },
+      },
+    },
+    interaction: {
+      intersect: false,
+      mode: 'index',
+    },
+    animation: {
+      duration: 800,
+      easing: 'easeOutQuart',
+    },
+  }
+
+  // ── Chart Data: Products Bar Chart ──
+  const barColors = [
+    '#3b82f6', '#8b5cf6', '#10b981', '#f59e0b',
+    '#ef4444', '#06b6d4', '#ec4899', '#6366f1',
+  ]
+
+  const productsBarData = {
+    labels: topProducts.map(([name]) => name),
+    datasets: [
+      {
+        label: 'Quantity Sold',
+        data: topProducts.map(([, data]) => data.qty),
+        backgroundColor: topProducts.map((_, i) => barColors[i % barColors.length]),
+        borderColor: topProducts.map((_, i) => barColors[i % barColors.length]),
+        borderWidth: 0,
+        borderRadius: 6,
+        barPercentage: 0.7,
+      },
+    ],
+  }
+
+  const productsBarOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    indexAxis: 'y',
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#1e293b',
+        titleFont: { size: 13, weight: '600' },
+        bodyFont: { size: 12 },
+        padding: 12,
+        cornerRadius: 8,
+        callbacks: {
+          afterLabel: (ctx) => {
+            const [, data] = topProducts[ctx.dataIndex]
+            return `Revenue: ₱${data.rev.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+          },
+        },
+      },
+    },
+    scales: {
+      x: {
+        beginAtZero: true,
+        grid: { color: 'rgba(0,0,0,0.04)' },
+        ticks: {
+          color: '#9ca3af',
+          font: { size: 12 },
+          stepSize: 1,
+        },
+      },
+      y: {
+        grid: { display: false },
+        ticks: {
+          color: '#374151',
+          font: { size: 13, weight: '500' },
+        },
+      },
+    },
+    animation: {
+      duration: 800,
+      easing: 'easeOutQuart',
+    },
+  }
 
   // Export CSV
   const handleExportCSV = () => {
@@ -70,6 +226,18 @@ function VendorAnalytics({ vendorOrders }) {
     link.click()
     document.body.removeChild(link)
   }
+
+  const chartToggleStyle = (active) => ({
+    padding: '8px 20px',
+    fontSize: '0.85rem',
+    fontWeight: 600,
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    background: active ? '#3b82f6' : '#f1f5f9',
+    color: active ? '#fff' : '#64748b',
+  })
 
   return (
     <div style={{ background: '#fff', padding: '24px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
@@ -100,51 +268,49 @@ function VendorAnalytics({ vendorOrders }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: '24px' }}>
-        
-        {/* CSS Bar Chart */}
-        <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '20px' }}>
-          <h4 style={{ margin: '0 0 20px', color: '#374151', fontSize: '1rem' }}>Sales (Last Active Days)</h4>
-          {sortedDates.length === 0 ? (
-            <p style={{ color: '#9ca3af' }}>No sales data available yet.</p>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '12px', height: '220px', marginTop: '40px', paddingBottom: '10px', overflowX: 'auto' }}>
-              {sortedDates.slice(-10).map(date => {
-                const heightPct = Math.max((salesByDate[date] / maxDailySales) * 100, 5) // min 5% height
-                return (
-                  <div key={date} style={{ flex: 1, minWidth: '40px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ color: '#6b7280', fontSize: '0.75rem', fontWeight: 600 }}>₱{salesByDate[date].toFixed(0)}</div>
-                    <div style={{ width: '100%', height: `${heightPct}%`, background: '#3b82f6', borderRadius: '4px 4px 0 0', transition: 'height 0.3s' }}></div>
-                    <div style={{ color: '#9ca3af', fontSize: '0.7rem' }}>{date.slice(5)}</div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
+      {/* Chart Section */}
+      <div style={{ border: '1px solid #e5e7eb', borderRadius: '10px', padding: '24px' }}>
+        {/* Chart Toggle */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ display: 'flex', gap: '8px', background: '#f8fafc', padding: '4px', borderRadius: '8px' }}>
+            <button
+              onClick={() => setChartView('sales')}
+              style={chartToggleStyle(chartView === 'sales')}
+            >
+              📈 Sales Chart
+            </button>
+            <button
+              onClick={() => setChartView('products')}
+              style={chartToggleStyle(chartView === 'products')}
+            >
+              📊 Top Products
+            </button>
+          </div>
+          <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+            {chartView === 'sales' ? 'Revenue over last 14 active days' : `Top ${topProducts.length} products by quantity sold`}
+          </span>
         </div>
 
-        {/* Top Products */}
-        <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '20px' }}>
-          <h4 style={{ margin: '0 0 20px', color: '#374151', fontSize: '1rem' }}>Top Products</h4>
-          {topProducts.length === 0 ? (
-             <p style={{ color: '#9ca3af' }}>No products sold yet.</p>
+        {/* Charts */}
+        <div style={{ height: '320px', position: 'relative' }}>
+          {chartView === 'sales' ? (
+            sortedDates.length === 0 ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af' }}>
+                <p>No sales data available yet.</p>
+              </div>
+            ) : (
+              <Line data={salesLineData} options={salesLineOptions} />
+            )
           ) : (
-             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-              <tbody>
-                {topProducts.map(([name, data]) => (
-                  <tr key={name} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                    <td style={{ padding: '10px 0', fontWeight: 600, color: '#1f2937' }}>{name}</td>
-                    <td style={{ padding: '10px 0', textAlign: 'right', color: '#6b7280' }}>
-                      <span style={{ fontWeight: 700, color: '#111' }}>{data.qty}</span> sold<br/>
-                      <span style={{ fontSize: '0.75rem' }}>₱{data.rev.toFixed(2)}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-             </table>
+            topProducts.length === 0 ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af' }}>
+                <p>No products sold yet.</p>
+              </div>
+            ) : (
+              <Bar data={productsBarData} options={productsBarOptions} />
+            )
           )}
         </div>
-
       </div>
     </div>
   )
