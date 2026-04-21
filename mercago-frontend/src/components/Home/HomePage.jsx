@@ -1,6 +1,112 @@
 import { useState, useEffect } from 'react'
 import { API_BASE_URL } from '../../config'
 
+// ── Product Card Component with Granular Pricing ──
+function ProductCard({ product, handleAddToCart, addedProductId, vendorName }) {
+  const [variation, setVariation] = useState('1')
+  const [customQty, setCustomQty] = useState('1')
+
+  // Normalize unit
+  const baseUnit = (product.unit || 'pcs').toLowerCase().trim()
+
+  let options = []
+  if (baseUnit === 'kg' || baseUnit === 'kilo' || baseUnit === 'kilogram') {
+    options = [
+      { label: '250g', multiplier: 0.25 },
+      { label: '500g', multiplier: 0.5 },
+      { label: '1kg', multiplier: 1 },
+      { label: '2kg', multiplier: 2 },
+      { label: '3kg', multiplier: 3 },
+      { label: '5kg', multiplier: 5 }
+    ]
+  } else if (baseUnit === 'g' || baseUnit === 'gram') {
+    options = [
+      { label: '100g', multiplier: 1 },
+      { label: '250g', multiplier: 2.5 },
+      { label: '500g', multiplier: 5 },
+      { label: '1kg', multiplier: 10 }
+    ]
+  } else {
+    options = [
+      { label: `1 ${product.unit}`, multiplier: 1 },
+      { label: `2 ${product.unit}s`, multiplier: 2 },
+      { label: `3 ${product.unit}s`, multiplier: 3 },
+      { label: `5 ${product.unit}s`, multiplier: 5 },
+      { label: `10 ${product.unit}s`, multiplier: 10 }
+    ]
+  }
+  
+  // Add Custom Option to the end
+  options.push({ label: 'Custom Amount...', multiplier: 'custom' })
+
+  // Pre-select the "1 unit" multiplier default based on base settings
+  useEffect(() => {
+    const defaultOpt = options.find(o => o.multiplier === 1) || options[0]
+    setVariation(String(defaultOpt.multiplier))
+  }, [baseUnit])
+
+  const isCustom = variation === 'custom'
+  const activeMultiplier = isCustom ? (Number(customQty) || 0) : (options.find(o => String(o.multiplier) === variation)?.multiplier || 1)
+  const displayPrice = (Number(product.price) * activeMultiplier).toFixed(2)
+
+  return (
+    <div style={{ background: '#fff', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', transition: 'transform 0.2s, box-shadow 0.2s', border: '1px solid #f3f4f6' }}
+      onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)' }}
+      onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)' }}>
+      {product.image_url ? (
+        <div style={{ padding: '12px', paddingBottom: '0' }}>
+          <img src={product.image_url} alt={product.product_name} style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block', borderRadius: '8px' }} />
+        </div>
+      ) : (
+        <div style={{ height: '160px', margin: '12px', marginBottom: '0', borderRadius: '8px', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', color: '#d1d5db' }}>🛒</div>
+      )}
+      <div style={{ padding: '16px', flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#111', marginBottom: '4px' }}>{product.product_name}</div>
+        <div style={{ color: '#6b7280', fontSize: '0.8rem', marginBottom: 'auto' }}>🏪 {vendorName || product.vendorName}</div>
+
+        {/* Granular Unit Dropdown */}
+        <div style={{ marginTop: '12px', marginBottom: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <select
+            value={variation}
+            onChange={e => setVariation(e.target.value)}
+            style={{ flex: 1, padding: '6px 8px', borderRadius: '6px', border: '1px solid #e5e7eb', fontSize: '0.82rem', fontWeight: 500, color: '#1f2937', background: '#f8fafc', outline: 'none', cursor: 'pointer', appearance: 'menulist' }}
+          >
+            {options.map(o => (
+              <option key={o.label} value={o.multiplier}>{o.label}</option>
+            ))}
+          </select>
+          {isCustom && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '0 6px' }}>
+              <input 
+                type="number" 
+                min="0.01" 
+                step="any"
+                value={customQty} 
+                onChange={(e) => setCustomQty(e.target.value)} 
+                style={{ width: '40px', border: 'none', background: 'transparent', fontSize: '0.82rem', fontWeight: 500, outline: 'none', textAlign: 'center', padding: '6px 0' }}
+              />
+              <span style={{ fontSize: '0.75rem', color: '#6b7280', fontWeight: 600 }}>{product.unit}</span>
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontWeight: 700, color: '#1e3a8a', fontSize: '1.05rem', lineHeight: 1 }}>₱{displayPrice}</span>
+            {activeMultiplier !== 1 && <span style={{ fontSize: '0.65rem', color: '#6b7280', marginTop: '2px' }}>₱{Number(product.price).toFixed(2)} / {product.unit}</span>}
+          </div>
+          <button
+            onClick={() => handleAddToCart(product, vendorName || product.vendorName, activeMultiplier)}
+            disabled={activeMultiplier <= 0}
+            style={{ background: addedProductId === product.id ? '#059669' : '#e0f2fe', color: addedProductId === product.id ? '#fff' : '#0284c7', opacity: activeMultiplier <= 0 ? 0.5 : 1, border: 'none', borderRadius: '6px', padding: '6px 12px', cursor: activeMultiplier <= 0 ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '0.8rem', transition: 'all 0.2s' }}>
+            {addedProductId === product.id ? '✓ Added' : '+ Add'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── All Listings Sub-Component ──
 function AllListingsSection({ allProducts, loading, handleAddToCart, addedProductId, CATEGORIES }) {
   const [activeCat, setActiveCat] = useState('All')
@@ -38,31 +144,12 @@ function AllListingsSection({ allProducts, loading, handleAddToCart, addedProduc
       )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
         {displayed.map((product) => (
-          <div key={product.id}
-            style={{ background: '#fff', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', transition: 'transform 0.2s, box-shadow 0.2s', border: '1px solid #f3f4f6' }}
-            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)' }}>
-            {product.image_url ? (
-              <div style={{ padding: '12px', paddingBottom: '0' }}>
-                <img src={product.image_url} alt={product.product_name} style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block', borderRadius: '8px' }} />
-              </div>
-            ) : (
-              <div style={{ height: '160px', margin: '12px', marginBottom: '0', borderRadius: '8px', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', color: '#d1d5db' }}>🛒</div>
-            )}
-            <div style={{ padding: '16px', flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-              <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#111', marginBottom: '4px' }}>{product.product_name}</div>
-              <div style={{ color: '#6b7280', fontSize: '0.8rem', marginBottom: 'auto' }}>🏪 {product.vendorName}</div>
-              <div style={{ color: '#9ca3af', fontSize: '0.75rem', marginBottom: '12px' }}>{product.category}</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 700, color: '#1e3a8a', fontSize: '1.05rem' }}>₱{Number(product.price).toFixed(2)}</span>
-                <button
-                  onClick={() => handleAddToCart(product, product.vendorName)}
-                  style={{ background: addedProductId === product.id ? '#059669' : '#e0f2fe', color: addedProductId === product.id ? '#fff' : '#0284c7', border: 'none', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem', transition: 'all 0.2s' }}>
-                  {addedProductId === product.id ? '✓ Added' : '+ Add'}
-                </button>
-              </div>
-            </div>
-          </div>
+          <ProductCard
+            key={product.id}
+            product={product}
+            handleAddToCart={handleAddToCart}
+            addedProductId={addedProductId}
+          />
         ))}
       </div>
     </div>
@@ -117,12 +204,12 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, onG
   const getCartCount = () => {
     try {
       const cart = JSON.parse(localStorage.getItem('mercago_cart') || '[]')
-      return cart.reduce((sum, item) => sum + (item.quantity || 0), 0)
+      return cart.length // Distinct items is cleaner than decimal quantities
     } catch { return 0 }
   }
   const [cartCount, setCartCount] = useState(getCartCount)
 
-  const handleAddToCart = (product, vendorName) => {
+  const handleAddToCart = (product, vendorName, quantityToAdd = 1) => {
     if (!currentUser || currentUser.role !== 'shopper') {
       setShowLoginPrompt(true)
       return
@@ -132,12 +219,12 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, onG
     const existing = cart.find((i) => i.product.id === product.id)
     let updatedCart
     if (existing) {
-      updatedCart = cart.map((i) => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i)
+      updatedCart = cart.map((i) => i.product.id === product.id ? { ...i, quantity: i.quantity + quantityToAdd } : i)
     } else {
-      updatedCart = [...cart, { product: { ...product, vendorName }, quantity: 1 }]
+      updatedCart = [...cart, { product: { ...product, vendorName }, quantity: quantityToAdd }]
     }
     localStorage.setItem('mercago_cart', JSON.stringify(updatedCart))
-    setCartCount(updatedCart.reduce((sum, item) => sum + (item.quantity || 0), 0))
+    setCartCount(updatedCart.length)
     setAddedProductId(product.id)
     setTimeout(() => setAddedProductId(null), 1500)
   }
@@ -321,29 +408,13 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, onG
                     </h3>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
                       {vendorFiltered.map((product) => (
-                        <div key={product.id} style={{ background: '#fff', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', transition: 'transform 0.2s, box-shadow 0.2s', border: '1px solid #f3f4f6' }}
-                          onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)' }}
-                          onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)' }}>
-                          {product.image_url ? (
-                            <div style={{ padding: '12px', paddingBottom: '0' }}>
-                              <img src={product.image_url} alt={product.product_name} style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block', borderRadius: '8px' }} />
-                            </div>
-                          ) : (
-                            <div style={{ height: '160px', margin: '12px', marginBottom: '0', borderRadius: '8px', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', color: '#d1d5db' }}>🛒</div>
-                          )}
-                          <div style={{ padding: '16px', flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-                            <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#111', marginBottom: '4px' }}>{product.product_name}</div>
-                            <div style={{ color: '#6b7280', fontSize: '0.8rem', marginBottom: 'auto' }}>{product.category}</div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
-                              <span style={{ fontWeight: 700, color: '#1e3a8a', fontSize: '1.05rem' }}>₱{Number(product.price).toFixed(2)} <span style={{ fontSize: '0.78rem', fontWeight: 500, color: '#6b7280' }}>/ {product.unit}</span></span>
-                              <button
-                                onClick={() => handleAddToCart(product, vendor.vendor_name)}
-                                style={{ background: addedProductId === product.id ? '#059669' : '#e0f2fe', color: addedProductId === product.id ? '#fff' : '#0284c7', border: 'none', borderRadius: '6px', padding: '6px 12px', fontWeight: 600, cursor: 'pointer', fontSize: '0.8rem', transition: 'all 0.2s' }}>
-                                {addedProductId === product.id ? '✓ Added' : '+ Add'}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
+                        <ProductCard
+                          key={product.id}
+                          product={product}
+                          vendorName={vendor.vendor_name}
+                          handleAddToCart={handleAddToCart}
+                          addedProductId={addedProductId}
+                        />
                       ))}
                     </div>
                   </div>

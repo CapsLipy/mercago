@@ -48,7 +48,7 @@ class OrderController extends Controller
         $request->validate([
             'items'             => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'uuid', 'exists:products,id'],
-            'items.*.quantity'  => ['required', 'integer', 'min:1'],
+            'items.*.quantity'  => ['required', 'numeric', 'min:0.001'],
         ]);
 
         // Group cart items by vendor so we create one Order per vendor

@@ -37,11 +37,36 @@ const emptyProductForm = {
   image: null,
 }
 
-function VendorAnalytics({ vendorOrders }) {
+function VendorAnalytics({ vendorOrders, products }) {
   const [chartView, setChartView] = useState('sales') // 'sales' | 'products'
   const [dateRange, setDateRange] = useState(14) // 7 | 14 | 30
   const [barMetric, setBarMetric] = useState('qty') // 'qty' | 'revenue'
   const chartRef = useRef(null)
+  const [selectedCategory, setSelectedCategory] = useState('All')
+
+  // Build product name → category lookup from products prop
+  const nameToCategory = {}
+  ;(Array.isArray(products) ? products : []).forEach(p => {
+    if (p.product_name && p.category) nameToCategory[p.product_name] = p.category
+  })
+
+  // Derive unique categories from vendor's actual products
+  const categories = [...new Set(
+    (Array.isArray(products) ? products : []).map(p => p.category).filter(Boolean)
+  )].sort()
+
+  // Filter orders by selected category at item level, recalculate totals
+  const filteredOrders = selectedCategory === 'All'
+    ? vendorOrders
+    : vendorOrders
+        .map(o => {
+          const matchingItems = o.items.filter(i =>
+            (nameToCategory[i.product_name] || '').toLowerCase() === selectedCategory.toLowerCase()
+          )
+          if (matchingItems.length === 0) return null
+          return { ...o, items: matchingItems, total_amount: matchingItems.reduce((s, i) => s + (parseFloat(i.subtotal) || 0), 0) }
+        })
+        .filter(Boolean)
 
   // Helper: check if a date string falls within a date range
   const isInRange = (dateStr, startDate, endDate) => {
@@ -66,7 +91,7 @@ function VendorAnalytics({ vendorOrders }) {
   let rangeRevenue = 0, rangeOrders = 0, rangeItems = 0
   let prevRevenue = 0, prevOrders = 0, prevItems = 0
 
-  vendorOrders.forEach(o => {
+  filteredOrders.forEach(o => {
     const amt = parseFloat(o.total_amount) || 0
     const items = o.items.reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0)
     if (isInRange(o.ordered_at, currentStart, now)) {
@@ -95,7 +120,7 @@ function VendorAnalytics({ vendorOrders }) {
 
   // Group sales by Date (format: YYYY-MM-DD)
   const salesByDate = {}
-  vendorOrders.forEach(o => {
+  filteredOrders.forEach(o => {
     const dStr = o.ordered_at ? o.ordered_at.split(' ')[0] : 'Unknown'
     if (!salesByDate[dStr]) salesByDate[dStr] = 0
     salesByDate[dStr] += parseFloat(o.total_amount) || 0
@@ -119,7 +144,7 @@ function VendorAnalytics({ vendorOrders }) {
 
   // Top Products
   const productTally = {}
-  vendorOrders.forEach(o => {
+  filteredOrders.forEach(o => {
     o.items.forEach(i => {
       const name = i.product_name
       if (!productTally[name]) productTally[name] = { qty: 0, rev: 0 }
@@ -346,18 +371,32 @@ function VendorAnalytics({ vendorOrders }) {
 
   // Export CSV
   const handleExportCSV = () => {
-    let csvContent = "data:text/csv;charset=utf-8,"
-    csvContent += "Order ID,Date,Shopper,Delivery Status,Total Amount\n"
+    let csvContent = "\uFEFF" // Add BOM for Excel UTF-8 support
+    csvContent += "Order ID,Date,Shopper,Delivery Status,Product Name,Category,Quantity,Unit Price,Subtotal\n"
     
-    vendorOrders.forEach(o => {
-      const row = [o.order_id, o.ordered_at, o.shopper_name, o.delivery_status, o.total_amount]
-      csvContent += row.join(",") + "\n"
+    filteredOrders.forEach(o => {
+      o.items.forEach(item => {
+        const category = nameToCategory[item.product_name] || 'N/A'
+        const escapeCsv = (str) => `"${String(str || '').replace(/"/g, '""')}"`
+        const row = [
+          o.order_id,
+          escapeCsv(o.ordered_at),
+          escapeCsv(o.shopper_name),
+          o.delivery_status,
+          escapeCsv(item.product_name),
+          escapeCsv(category),
+          item.quantity,
+          item.unit_price,
+          item.subtotal
+        ]
+        csvContent += row.join(",") + "\n"
+      })
     })
 
-    const encodedUri = encodeURI(csvContent)
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement("a")
-    link.setAttribute("href", encodedUri)
-    link.setAttribute("download", "vendor_sales_report.csv")
+    link.href = URL.createObjectURL(blob)
+    link.setAttribute("download", `vendor_sales_report${selectedCategory !== 'All' ? '_' + selectedCategory : ''}.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -382,6 +421,54 @@ function VendorAnalytics({ vendorOrders }) {
         <button onClick={handleExportCSV} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>
           📥 Export CSV
         </button>
+      </div>
+
+      {/* Category Filter Dropdown */}
+      <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <label htmlFor="categoryFilter" style={{ fontSize: '0.85rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          Filter by Category:
+        </label>
+        <div style={{ position: 'relative' }}>
+          <select
+            id="categoryFilter"
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            style={{
+              appearance: 'none',
+              padding: '8px 36px 8px 16px',
+              fontSize: '0.9rem',
+              fontWeight: 500,
+              color: '#111',
+              background: '#fff',
+              border: '1px solid #d1d5db',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              outline: 'none',
+              minWidth: '160px',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+            }}
+          >
+            <option value="All">All Categories</option>
+            {categories.map(cat => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+          {/* Custom Dropdown Arrow */}
+          <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#6b7280' }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </div>
+        </div>
+        
+        {selectedCategory !== 'All' && (
+          <button 
+            onClick={() => setSelectedCategory('All')} 
+            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500, textDecoration: 'underline' }}
+          >
+            Clear Filter
+          </button>
+        )}
       </div>
 
       {/* Summary Cards */}
@@ -680,7 +767,7 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
               </div>
             </div>
           )}
-          <VendorAnalytics vendorOrders={vendorOrders} />
+          <VendorAnalytics vendorOrders={vendorOrders} products={products} />
         </>
       )}
 
@@ -692,7 +779,19 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
             <label>Product Name<input type="text" value={productForm.product_name} onChange={(e) => setProductForm((p) => ({ ...p, product_name: e.target.value }))} required /></label>
             <label>Category<input type="text" value={productForm.category} onChange={(e) => setProductForm((p) => ({ ...p, category: e.target.value }))} required /></label>
             <label>Price<input type="number" min="0" step="0.01" value={productForm.price} onChange={(e) => setProductForm((p) => ({ ...p, price: e.target.value }))} required /></label>
-            <label>Unit<input type="text" value={productForm.unit} onChange={(e) => setProductForm((p) => ({ ...p, unit: e.target.value }))} required /></label>
+            <label>
+              Unit
+              <select value={productForm.unit} onChange={(e) => setProductForm((p) => ({ ...p, unit: e.target.value }))} required style={{ background: '#fff' }}>
+                <option value="" disabled>Select unit...</option>
+                <option value="kg">kg (Kilogram)</option>
+                <option value="g">g (Gram)</option>
+                <option value="pcs">pcs (Pieces)</option>
+                <option value="pack">pack</option>
+                <option value="tray">tray</option>
+                <option value="box">box</option>
+                <option value="bunch">bunch</option>
+              </select>
+            </label>
             <label>Stock<input type="number" min="0" step="1" value={productForm.stock_qty} onChange={(e) => setProductForm((p) => ({ ...p, stock_qty: e.target.value }))} required /></label>
             <label>Product Image<input id="productImageInput" type="file" accept="image/*" onChange={(e) => setProductForm((p) => ({ ...p, image: e.target.files[0] }))} /></label>
             <div className="actions">
