@@ -70,4 +70,45 @@ class AuthController extends Controller
             'message' => 'Logged out successfully.',
         ]);
     }
+
+    public function updateBanner(Request $request)
+    {
+        $request->validate([
+            'banner' => ['required', 'image', 'max:5120'], // 5MB max
+        ]);
+
+        $user = $request->user();
+
+        if ($request->hasFile('banner')) {
+            $path = $request->file('banner')->store('banners', 'public');
+            $user->banner_url = '/storage/' . $path;
+            $user->save();
+        }
+
+        return response()->json([
+            'message' => 'Banner updated successfully.',
+            'user' => $user,
+        ]);
+    }
+
+    public function updateProfile(Request $request)
+    {
+        $validated = $request->validate([
+            'first_name' => ['required', 'string', 'max:100'],
+            'middle_name' => ['nullable', 'string', 'max:50'],
+            'last_name' => ['required', 'string', 'max:100'],
+            'contact_no' => ['required', 'string', 'max:20'],
+            'age' => ['required', 'integer', 'min:1'],
+            'sex' => ['required', 'string', 'max:10'],
+            'address' => ['required', 'string'],
+        ]);
+
+        $user = $request->user();
+        $user->update($validated);
+
+        return response()->json([
+            'message' => 'Profile updated successfully.',
+            'user' => $user,
+        ]);
+    }
 }

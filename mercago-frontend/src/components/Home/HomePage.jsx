@@ -1,114 +1,107 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { API_BASE_URL } from '../../config'
+import ProductDetailsModal from '../UI/ProductDetailsModal'
 
-// ── Product Card Component with Granular Pricing ──
-function ProductCard({ product, handleAddToCart, addedProductId, vendorName }) {
-  const [variation, setVariation] = useState('1')
-  const [customQty, setCustomQty] = useState('1')
+// ── Vendor Reviews Sub-Component ──
+function VendorReviews({ vendor, token, API_BASE_URL, currentUser, onReviewSubmitted }) {
+  const [showReviews, setShowReviews] = useState(false)
+  const [reviews, setReviews] = useState(vendor.vendor_reviews || [])
+  const [rating, setRating] = useState(5)
+  const [comment, setComment] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState('')
 
-  // Normalize unit
-  const baseUnit = (product.unit || 'pcs').toLowerCase().trim()
+  const handleReviewSubmit = async (e) => {
+    e.preventDefault()
+    if (!token) return setError('You must be logged in to leave a review.')
+    setIsSubmitting(true); setError('')
 
-  let options = []
-  if (baseUnit === 'kg' || baseUnit === 'kilo' || baseUnit === 'kilogram') {
-    options = [
-      { label: '250g', multiplier: 0.25 },
-      { label: '500g', multiplier: 0.5 },
-      { label: '1kg', multiplier: 1 },
-      { label: '2kg', multiplier: 2 },
-      { label: '3kg', multiplier: 3 },
-      { label: '5kg', multiplier: 5 }
-    ]
-  } else if (baseUnit === 'g' || baseUnit === 'gram') {
-    options = [
-      { label: '100g', multiplier: 1 },
-      { label: '250g', multiplier: 2.5 },
-      { label: '500g', multiplier: 5 },
-      { label: '1kg', multiplier: 10 }
-    ]
-  } else {
-    options = [
-      { label: `1 ${product.unit}`, multiplier: 1 },
-      { label: `2 ${product.unit}s`, multiplier: 2 },
-      { label: `3 ${product.unit}s`, multiplier: 3 },
-      { label: `5 ${product.unit}s`, multiplier: 5 },
-      { label: `10 ${product.unit}s`, multiplier: 10 }
-    ]
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/reviews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ vendor_id: vendor.vendor_id, rating, comment })
+      })
+
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.message || 'Failed to submit review')
+
+      setReviews([data.review, ...reviews])
+      setComment(''); setRating(5)
+      if (onReviewSubmitted) onReviewSubmitted()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
-  
-  // Add Custom Option to the end
-  options.push({ label: 'Custom Amount...', multiplier: 'custom' })
-
-  // Pre-select the "1 unit" multiplier default based on base settings
-  useEffect(() => {
-    const defaultOpt = options.find(o => o.multiplier === 1) || options[0]
-    setVariation(String(defaultOpt.multiplier))
-  }, [baseUnit])
-
-  const isCustom = variation === 'custom'
-  const activeMultiplier = isCustom ? (Number(customQty) || 0) : (options.find(o => String(o.multiplier) === variation)?.multiplier || 1)
-  const displayPrice = (Number(product.price) * activeMultiplier).toFixed(2)
 
   return (
-    <div style={{ background: '#fff', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', transition: 'transform 0.2s, box-shadow 0.2s', border: '1px solid #f3f4f6' }}
-      onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)' }}
-      onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)' }}>
-      {product.image_url ? (
-        <div style={{ padding: '12px', paddingBottom: '0' }}>
-          <img src={product.image_url} alt={product.product_name} style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block', borderRadius: '8px' }} />
-        </div>
-      ) : (
-        <div style={{ height: '160px', margin: '12px', marginBottom: '0', borderRadius: '8px', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', color: '#d1d5db' }}>🛒</div>
-      )}
-      <div style={{ padding: '16px', flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#111', marginBottom: '4px' }}>{product.product_name}</div>
-        <div style={{ color: '#6b7280', fontSize: '0.8rem', marginBottom: 'auto' }}>🏪 {vendorName || product.vendorName}</div>
+    <div style={{ marginBottom: '2rem', background: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+      <button 
+        onClick={() => setShowReviews(!showReviews)}
+        style={{ width: '100%', padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', border: 'none', cursor: 'pointer', fontSize: '1rem', fontWeight: 600, color: '#334155' }}
+      >
+        <span>Store Reviews ({reviews.length})</span>
+        <span>{showReviews ? '▲' : '▼'}</span>
+      </button>
 
-        {/* Granular Unit Dropdown */}
-        <div style={{ marginTop: '12px', marginBottom: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <select
-            value={variation}
-            onChange={e => setVariation(e.target.value)}
-            style={{ flex: 1, padding: '6px 8px', borderRadius: '6px', border: '1px solid #e5e7eb', fontSize: '0.82rem', fontWeight: 500, color: '#1f2937', background: '#f8fafc', outline: 'none', cursor: 'pointer', appearance: 'menulist' }}
-          >
-            {options.map(o => (
-              <option key={o.label} value={o.multiplier}>{o.label}</option>
-            ))}
-          </select>
-          {isCustom && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '0 6px' }}>
-              <input 
-                type="number" 
-                min="0.01" 
-                step="any"
-                value={customQty} 
-                onChange={(e) => setCustomQty(e.target.value)} 
-                style={{ width: '40px', border: 'none', background: 'transparent', fontSize: '0.82rem', fontWeight: 500, outline: 'none', textAlign: 'center', padding: '6px 0' }}
+      {showReviews && (
+        <div style={{ padding: '20px', borderTop: '1px solid #e2e8f0' }}>
+          {currentUser?.role === 'shopper' && (
+            <form onSubmit={handleReviewSubmit} style={{ background: '#f1f5f9', padding: '16px', borderRadius: '8px', marginBottom: '20px' }}>
+              <h4 style={{ margin: '0 0 10px 0', fontSize: '0.95rem', color: '#334155' }}>Write a Review for {vendor.vendor_name}</h4>
+              {error && <div style={{ color: '#ef4444', fontSize: '0.85rem', marginBottom: '8px' }}>{error}</div>}
+              
+              <div style={{ marginBottom: '10px' }}>
+                <select value={rating} onChange={(e) => setRating(Number(e.target.value))} style={{ padding: '6px', borderRadius: '4px', border: '1px solid #cbd5e1' }}>
+                  <option value={5}>5 - Excellent</option>
+                  <option value={4}>4 - Good</option>
+                  <option value={3}>3 - Average</option>
+                  <option value={2}>2 - Poor</option>
+                  <option value={1}>1 - Terrible</option>
+                </select>
+              </div>
+              
+              <textarea 
+                value={comment} 
+                onChange={(e) => setComment(e.target.value)} 
+                placeholder="Share your experience..."
+                style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1', marginBottom: '10px', minHeight: '60px', boxSizing: 'border-box' }}
               />
-              <span style={{ fontSize: '0.75rem', color: '#6b7280', fontWeight: 600 }}>{product.unit}</span>
-            </div>
+              <button 
+                type="submit" disabled={isSubmitting}
+                style={{ background: '#2563eb', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}
+              >
+                {isSubmitting ? 'Submitting...' : 'Submit Review'}
+              </button>
+            </form>
           )}
-        </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontWeight: 700, color: '#1e3a8a', fontSize: '1.05rem', lineHeight: 1 }}>₱{displayPrice}</span>
-            {activeMultiplier !== 1 && <span style={{ fontSize: '0.65rem', color: '#6b7280', marginTop: '2px' }}>₱{Number(product.price).toFixed(2)} / {product.unit}</span>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {reviews.length === 0 ? (
+              <p style={{ color: '#64748b', fontSize: '0.9rem', fontStyle: 'italic', margin: 0 }}>No reviews yet.</p>
+            ) : (
+              reviews.map(review => (
+                <div key={review.id} style={{ borderBottom: '1px solid #f1f5f9', paddingBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                    <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{review.user?.first_name} {review.user?.last_name}</strong>
+                    <span style={{ color: '#f59e0b', fontSize: '0.9rem' }}>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</span>
+                  </div>
+                  {review.comment && <p style={{ margin: 0, fontSize: '0.9rem', color: '#475569' }}>{review.comment}</p>}
+                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '4px' }}>{new Date(review.created_at).toLocaleDateString()}</div>
+                </div>
+              ))
+            )}
           </div>
-          <button
-            onClick={() => handleAddToCart(product, vendorName || product.vendorName, activeMultiplier)}
-            disabled={activeMultiplier <= 0}
-            style={{ background: addedProductId === product.id ? '#059669' : '#e0f2fe', color: addedProductId === product.id ? '#fff' : '#0284c7', opacity: activeMultiplier <= 0 ? 0.5 : 1, border: 'none', borderRadius: '6px', padding: '6px 12px', cursor: activeMultiplier <= 0 ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: '0.8rem', transition: 'all 0.2s' }}>
-            {addedProductId === product.id ? '✓ Added' : '+ Add'}
-          </button>
         </div>
-      </div>
+      )}
     </div>
   )
 }
 
 // ── All Listings Sub-Component ──
-function AllListingsSection({ allProducts, loading, handleAddToCart, addedProductId, CATEGORIES }) {
+function AllListingsSection({ allProducts, loading, handleAddToCart, addedProductId, CATEGORIES, onProductClick }) {
   const [activeCat, setActiveCat] = useState('All')
 
   const displayed = activeCat === 'All'
@@ -144,50 +137,84 @@ function AllListingsSection({ allProducts, loading, handleAddToCart, addedProduc
       )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
         {displayed.map((product) => (
-          <ProductCard
-            key={product.id}
-            product={product}
-            handleAddToCart={handleAddToCart}
-            addedProductId={addedProductId}
-          />
+          <div key={product.id}
+            onClick={() => onProductClick(product)}
+            style={{ background: '#fff', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', transition: 'transform 0.2s, box-shadow 0.2s', border: '1px solid #f3f4f6', cursor: 'pointer' }}
+            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)' }}>
+            {product.image_url ? (
+              <div style={{ padding: '12px', paddingBottom: '0' }}>
+                <img src={product.image_url} alt={product.product_name} style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block', borderRadius: '8px' }} />
+              </div>
+            ) : (
+              <div style={{ height: '160px', margin: '12px', marginBottom: '0', borderRadius: '8px', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', color: '#d1d5db' }}>🛒</div>
+            )}
+            <div style={{ padding: '16px', flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#111', marginBottom: '4px' }}>{product.product_name}</div>
+              <div style={{ color: '#6b7280', fontSize: '0.8rem', marginBottom: 'auto' }}>🏪 {product.vendorName}</div>
+              <div style={{ color: '#9ca3af', fontSize: '0.75rem', marginBottom: '12px' }}>{product.category}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontWeight: 700, color: '#1e3a8a', fontSize: '1.05rem' }}>₱{Number(product.price).toFixed(2)}</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleAddToCart(product, product.vendorName); }}
+                  style={{ background: addedProductId === product.id ? '#059669' : '#e0f2fe', color: addedProductId === product.id ? '#fff' : '#0284c7', border: 'none', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem', transition: 'all 0.2s' }}>
+                  {addedProductId === product.id ? '✓ Added' : '+ Add'}
+                </button>
+              </div>
+            </div>
+          </div>
         ))}
       </div>
     </div>
   )
 }
 
-export default function HomePage({ onLoginClick, onSignUpClick, currentUser, onGoToDashboard }) {
+export default function HomePage({ onLoginClick, onSignUpClick, currentUser, token, onGoToDashboard }) {
   const [vendors, setVendors] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [selectedCategory, setSelectedCategory] = useState(null)
   const [showLoginPrompt, setShowLoginPrompt] = useState(false)
+  const [selectedVendorId, setSelectedVendorId] = useState(null)
 
-  const CATEGORIES = ['Fish', 'Crab', 'Shrimp', 'Pork', 'Chicken', 'Beef', 'Vegetables', 'Fruits']
 
-  const CATEGORY_IMAGES = {
-    Fish: '/cat-fish.png',
-    Crab: '/cat-crab.png',
-    Shrimp: '/cat-shrimp.png',
-    Pork: '/cat-pork.png',
-    Chicken: '/cat-chicken.png',
-    Beef: '/cat-beef.png',
-    Vegetables: '/cat-veggie.png',
-    Fruits: '/cat-fruits.png',
-  }
+  const CATEGORIES = ['Fish', 'Crab', 'Shrimp', 'Pork', 'Chicken', 'Beef']
 
-  useEffect(() => {
+  const [currentBannerIndex, setCurrentBannerIndex] = useState(0)
+
+  const fetchVendors = () => {
     fetch(`${API_BASE_URL}/api/public/shop`)
       .then((r) => r.json())
       .then((d) => setVendors(Array.isArray(d) ? d : []))
       .catch(() => setVendors([]))
       .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    fetchVendors()
   }, [])
+
+  // Auto-advance banner every 10 seconds
+  useEffect(() => {
+    const bannerVendors = vendors.filter(v => v.banner_url)
+    if (bannerVendors.length <= 1) return
+
+    const timer = setInterval(() => {
+      setCurrentBannerIndex(prev => (prev >= bannerVendors.length - 1 ? 0 : prev + 1))
+    }, 10000)
+
+    return () => clearInterval(timer)
+  }, [vendors, currentBannerIndex])
 
   // Flatten all products for search & category filter
   const allProducts = vendors.flatMap((v) =>
     v.products.map((p) => ({ ...p, vendorName: v.vendor_name }))
   )
+
+  const globalCategories = Array.from(new Set([
+    ...CATEGORIES,
+    ...allProducts.map(p => p.category).filter(Boolean)
+  ]))
 
   const filteredProducts = allProducts.filter((p) => {
     const matchesSearch = p.product_name.toLowerCase().includes(search.toLowerCase()) ||
@@ -200,31 +227,40 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, onG
 
   const [addedProductId, setAddedProductId] = useState(null)
 
-  // Live cart count from localStorage
+  // Live cart count from localStorage (per-user key)
+  const cartKey = currentUser ? `mercago_cart_${currentUser.id}` : null
   const getCartCount = () => {
+    if (!cartKey) return 0
     try {
-      const cart = JSON.parse(localStorage.getItem('mercago_cart') || '[]')
-      return cart.length // Distinct items is cleaner than decimal quantities
+      const cart = JSON.parse(localStorage.getItem(cartKey) || '[]')
+      return cart.reduce((sum, item) => sum + (item.quantity || 0), 0)
     } catch { return 0 }
   }
   const [cartCount, setCartCount] = useState(getCartCount)
 
-  const handleAddToCart = (product, vendorName, quantityToAdd = 1) => {
+  // Reset cart count when user changes (login/logout)
+  useEffect(() => {
+    setCartCount(getCartCount())
+  }, [currentUser])
+  const [selectedProductForModal, setSelectedProductForModal] = useState(null)
+
+  const handleAddToCart = (product, vendorName) => {
     if (!currentUser || currentUser.role !== 'shopper') {
       setShowLoginPrompt(true)
       return
     }
-    // Add to localStorage cart so ShopperDashboard picks it up
-    const cart = (() => { try { return JSON.parse(localStorage.getItem('mercago_cart') || '[]') } catch { return [] } })()
+    // Add to localStorage cart so ShopperDashboard picks it up (per-user key)
+    const key = `mercago_cart_${currentUser.id}`
+    const cart = (() => { try { return JSON.parse(localStorage.getItem(key) || '[]') } catch { return [] } })()
     const existing = cart.find((i) => i.product.id === product.id)
     let updatedCart
     if (existing) {
-      updatedCart = cart.map((i) => i.product.id === product.id ? { ...i, quantity: i.quantity + quantityToAdd } : i)
+      updatedCart = cart.map((i) => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i)
     } else {
-      updatedCart = [...cart, { product: { ...product, vendorName }, quantity: quantityToAdd }]
+      updatedCart = [...cart, { product: { ...product, vendorName }, quantity: 1 }]
     }
-    localStorage.setItem('mercago_cart', JSON.stringify(updatedCart))
-    setCartCount(updatedCart.length)
+    localStorage.setItem(key, JSON.stringify(updatedCart))
+    setCartCount(updatedCart.reduce((sum, item) => sum + (item.quantity || 0), 0))
     setAddedProductId(product.id)
     setTimeout(() => setAddedProductId(null), 1500)
   }
@@ -260,7 +296,7 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, onG
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '2rem' }}>
 
           {/* Logo */}
-          <div style={{ cursor: 'pointer', flexShrink: 0 }} onClick={() => setSelectedCategory(null)}>
+          <div style={{ cursor: 'pointer', flexShrink: 0 }} onClick={() => { setSelectedCategory(null); setSelectedVendorId(null); }}>
             <span style={{ fontSize: '2rem', fontWeight: 800, color: '#2563eb', letterSpacing: '-0.5px' }}>
               MercaGO
             </span>
@@ -273,7 +309,7 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, onG
                 type="text"
                 placeholder="Search fresh products..."
                 value={search}
-                onChange={(e) => { setSearch(e.target.value); setSelectedCategory(null) }}
+                onChange={(e) => { setSearch(e.target.value); setSelectedCategory(null); setSelectedVendorId(null); }}
                 style={{ width: '100%', border: '1px solid #e5e7eb', borderRight: 'none', borderTopLeftRadius: '4px', borderBottomLeftRadius: '4px', outline: 'none', padding: '10px 32px 10px 16px', fontSize: '0.9rem', background: '#f3f6f9' }}
               />
               {search && (
@@ -342,30 +378,123 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, onG
       {/* ── Body ── */}
       <main style={{ maxWidth: 1000, margin: '2rem auto', padding: '0 1.5rem' }}>
 
-        {/* ── Main Grid: Shows categories or search results ── */}
-        {!search && !selectedCategory ? (
-          <>
-            {/* Category Grid */}
-            <div style={{ marginBottom: '4rem' }}>
-              <h2 style={{ margin: '0 0 20px', fontWeight: 600, fontSize: '1.2rem', color: '#111', textTransform: 'uppercase', letterSpacing: '0.5px' }}>CATEGORIES</h2>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '24px' }}>
-                {CATEGORIES.slice(0, 6).map((cat) => (
-                  <div key={cat} onClick={() => setSelectedCategory(cat)}
-                    style={{ background: '#fff', borderRadius: '16px', overflow: 'hidden', cursor: 'pointer', display: 'flex', flexDirection: 'column', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', transition: 'transform 0.2s' }}
-                    onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)' }}
-                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)' }}
-                  >
+        {/* ── Vendor Storefront View ── */}
+        {selectedVendorId ? (
+          (() => {
+            const vendor = vendors.find(v => v.vendor_id === selectedVendorId)
+            if (!vendor) return <p>Vendor not found.</p>
+            const vendorProducts = vendor.products.map(p => ({ ...p, vendorName: vendor.vendor_name }))
+            return (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: '1rem' }}>
+                  <button onClick={() => setSelectedVendorId(null)} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', padding: 0 }}>← Back to Marketplace</button>
+                </div>
+                {vendor.banner_url && (
+                  <div style={{ marginBottom: '2rem', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', background: '#fff' }}>
                     <img
-                      src={CATEGORY_IMAGES[cat]}
-                      alt={cat}
-                      style={{ width: '100%', height: '220px', objectFit: 'cover', display: 'block' }}
-                      onError={(e) => { e.target.style.display = 'none' }}
+                      src={`${API_BASE_URL}${vendor.banner_url}`}
+                      alt={`${vendor.vendor_name} Banner`}
+                      style={{ width: '100%', height: '300px', objectFit: 'cover', display: 'block' }}
                     />
-                    <div style={{ padding: '16px', textAlign: 'center', fontWeight: 700, fontSize: '1.1rem', textTransform: 'uppercase', color: '#111' }}>{cat}</div>
                   </div>
-                ))}
-              </div>
-            </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h2 style={{ fontSize: '1.5rem', margin: 0, color: '#111' }}>🏪 {vendor.vendor_name}'s Store</h2>
+                  <span style={{ background: '#fef3c7', color: '#b45309', padding: '6px 12px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 600 }}>
+                    ★ {vendor.vendor_rating > 0 ? vendor.vendor_rating : 'New'} ({vendor.vendor_reviews?.length || 0} reviews)
+                  </span>
+                </div>
+                
+                <VendorReviews 
+                  vendor={vendor} 
+                  token={token} 
+                  API_BASE_URL={API_BASE_URL} 
+                  currentUser={currentUser}
+                  onReviewSubmitted={fetchVendors}
+                />
+                <AllListingsSection
+                  allProducts={vendorProducts}
+                  loading={loading}
+                  handleAddToCart={handleAddToCart}
+                  addedProductId={addedProductId}
+                  CATEGORIES={Array.from(new Set(vendorProducts.map(p => p.category).filter(Boolean)))}
+                  onProductClick={(product) => setSelectedProductForModal(product)}
+                />
+              </>
+            )
+          })()
+        ) : !search && !selectedCategory ? (
+          <>
+            {/* Vendor Banner Carousel */}
+            {(() => {
+              const bannerVendors = vendors.filter(v => v.banner_url)
+              if (bannerVendors.length === 0) {
+                return (
+                  <div style={{ marginBottom: '3rem', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', background: 'linear-gradient(to right, #1e3a8a, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '300px' }}>
+                    <div style={{ textAlign: 'center', color: '#fff', padding: '0 20px' }}>
+                      <h1 style={{ fontSize: '2.5rem', marginBottom: '1rem', fontWeight: 800 }}>Welcome to MercaGO</h1>
+                      <p style={{ fontSize: '1.2rem', color: '#bfdbfe', margin: 0 }}>Fresh marketplace goods delivered right to your door.</p>
+                    </div>
+                  </div>
+                )
+              }
+              return (
+                <div style={{ marginBottom: '3rem', position: 'relative', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 6px 20px rgba(0,0,0,0.12)', background: '#0f172a' }}>
+                  {/* Sliding track — each child is exactly 100% wide, overflow is clipped by parent */}
+                  <div style={{
+                    display: 'flex',
+                    width: `${bannerVendors.length * 100}%`,
+                    transform: `translateX(-${currentBannerIndex * (100 / bannerVendors.length)}%)`,
+                    transition: 'transform 0.7s cubic-bezier(0.4, 0, 0.2, 1)'
+                  }}>
+                    {bannerVendors.map(vendor => (
+                      <div key={vendor.vendor_id} style={{ width: `${100 / bannerVendors.length}%`, flexShrink: 0 }}>
+                        <img
+                          src={`${API_BASE_URL}${vendor.banner_url}`}
+                          alt={`${vendor.vendor_name} Banner`}
+                          onClick={() => setSelectedVendorId(vendor.vendor_id)}
+                          style={{ width: '100%', height: '300px', objectFit: 'cover', display: 'block', cursor: 'pointer' }}
+                          draggable={false}
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {bannerVendors.length > 1 && (
+                    <>
+                      {/* Left arrow */}
+                      <button
+                        onClick={() => setCurrentBannerIndex(prev => (prev === 0 ? bannerVendors.length - 1 : prev - 1))}
+                        style={{ position: 'absolute', top: '50%', left: '12px', transform: 'translateY(-50%)', zIndex: 2, background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '50%', width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.25)', color: '#fff', fontSize: '1.1rem', transition: 'all 0.2s ease' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(15,23,42,0.8)'; e.currentTarget.style.transform = 'translateY(-50%) scale(1.1)' }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(15,23,42,0.55)'; e.currentTarget.style.transform = 'translateY(-50%) scale(1)' }}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                      </button>
+                      {/* Right arrow */}
+                      <button
+                        onClick={() => setCurrentBannerIndex(prev => (prev === bannerVendors.length - 1 ? 0 : prev + 1))}
+                        style={{ position: 'absolute', top: '50%', right: '12px', transform: 'translateY(-50%)', zIndex: 2, background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '50%', width: '44px', height: '44px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.25)', color: '#fff', fontSize: '1.1rem', transition: 'all 0.2s ease' }}
+                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(15,23,42,0.8)'; e.currentTarget.style.transform = 'translateY(-50%) scale(1.1)' }}
+                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(15,23,42,0.55)'; e.currentTarget.style.transform = 'translateY(-50%) scale(1)' }}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                      </button>
+                      {/* Dot indicators */}
+                      <div style={{ position: 'absolute', bottom: '14px', left: '50%', transform: 'translateX(-50%)', zIndex: 2, display: 'flex', gap: '8px' }}>
+                        {bannerVendors.map((v, i) => (
+                          <button
+                            key={v.vendor_id}
+                            onClick={() => setCurrentBannerIndex(i)}
+                            style={{ width: i === currentBannerIndex ? '24px' : '8px', height: '8px', borderRadius: '4px', border: 'none', background: i === currentBannerIndex ? '#fff' : 'rgba(255,255,255,0.45)', cursor: 'pointer', padding: 0, transition: 'all 0.35s ease' }}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            })()}
 
             {/* ── All Listings ── */}
             <AllListingsSection
@@ -373,7 +502,8 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, onG
               loading={loading}
               handleAddToCart={handleAddToCart}
               addedProductId={addedProductId}
-              CATEGORIES={CATEGORIES}
+              CATEGORIES={globalCategories}
+              onProductClick={(product) => setSelectedProductForModal(product)}
             />
           </>
         ) : (
@@ -408,13 +538,30 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, onG
                     </h3>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
                       {vendorFiltered.map((product) => (
-                        <ProductCard
-                          key={product.id}
-                          product={product}
-                          vendorName={vendor.vendor_name}
-                          handleAddToCart={handleAddToCart}
-                          addedProductId={addedProductId}
-                        />
+                        <div key={product.id} style={{ background: '#fff', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', transition: 'transform 0.2s, box-shadow 0.2s', border: '1px solid #f3f4f6', cursor: 'pointer' }}
+                          onClick={() => setSelectedProductForModal({ ...product, vendorName: vendor.vendor_name })}
+                          onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)' }}
+                          onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)' }}>
+                          {product.image_url ? (
+                            <div style={{ padding: '12px', paddingBottom: '0' }}>
+                              <img src={product.image_url} alt={product.product_name} style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block', borderRadius: '8px' }} />
+                            </div>
+                          ) : (
+                            <div style={{ height: '160px', margin: '12px', marginBottom: '0', borderRadius: '8px', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', color: '#d1d5db' }}>🛒</div>
+                          )}
+                          <div style={{ padding: '16px', flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#111', marginBottom: '4px' }}>{product.product_name}</div>
+                            <div style={{ color: '#6b7280', fontSize: '0.8rem', marginBottom: 'auto' }}>{product.category}</div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+                              <span style={{ fontWeight: 700, color: '#1e3a8a', fontSize: '1.05rem' }}>₱{Number(product.price).toFixed(2)} <span style={{ fontSize: '0.78rem', fontWeight: 500, color: '#6b7280' }}>/ {product.unit}</span></span>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleAddToCart(product, vendor.vendor_name); }}
+                                style={{ background: addedProductId === product.id ? '#059669' : '#e0f2fe', color: addedProductId === product.id ? '#fff' : '#0284c7', border: 'none', borderRadius: '6px', padding: '6px 12px', fontWeight: 600, cursor: 'pointer', fontSize: '0.8rem', transition: 'all 0.2s' }}>
+                                {addedProductId === product.id ? '✓ Added' : '+ Add'}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>
@@ -423,6 +570,18 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, onG
           </>
         )}
       </main>
+
+      {selectedProductForModal && (
+        <ProductDetailsModal
+          product={selectedProductForModal}
+          token={token}
+          API_BASE_URL={API_BASE_URL}
+          currentUser={currentUser}
+          onClose={() => setSelectedProductForModal(null)}
+          onAddToCart={(product) => handleAddToCart(product, product.vendorName)}
+          onReviewSubmitted={fetchVendors}
+        />
+      )}
 
       {/* ── Footer ── */}
       <footer style={{ background: '#1e293b', color: '#e2e8f0', padding: '3rem 2rem', marginTop: '4rem' }}>
@@ -436,9 +595,9 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, onG
             </div>
           </div>
           <div>
-            <h4 style={{ color: '#fff', fontSize: '1rem', marginBottom: '1rem', fontWeight: 600 }}>Social Media</h4>
+            <h4 style={{ color: '#fff', fontSize: '1rem', marginBottom: '1rem', fontWeight: 600 }}></h4>
             <div style={{ display: 'flex', gap: '12px' }}>
-              {['f', 't', 'i', 'y', 'in'].map((social, i) => (
+              {[''].map((social, i) => (
                 <div key={i} style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1e293b', fontWeight: 'bold' }}>
                   {social}
                 </div>

@@ -21,17 +21,26 @@ class OrderController extends Controller
     {
         $vendors = User::where('role', 'vendor')
             ->with(['products' => function ($q) {
-                $q->where('stock_qty', '>', 0)->latest();
-            }])
+                $q->where('stock_qty', '>', 0)
+                  ->with('reviews.user')
+                  ->latest();
+            }, 'vendorReviews.user'])
             ->get()
             ->map(function ($vendor) {
                 return [
                     'vendor_id'   => $vendor->id,
                     'vendor_name' => "{$vendor->first_name} {$vendor->last_name}",
-                    'products'    => $vendor->products->values(),
+                    'banner_url'  => $vendor->banner_url,
+                    'vendor_rating' => round((float) $vendor->vendorReviews->avg('rating'), 1),
+                    'vendor_reviews' => $vendor->vendorReviews,
+                    'products'    => $vendor->products->map(function($product) {
+                        $productArray = $product->toArray();
+                        $productArray['avg_rating'] = round((float) $product->reviews->avg('rating'), 1);
+                        return $productArray;
+                    })->values(),
                 ];
             })
-            ->filter(fn($v) => $v['products']->isNotEmpty())
+            ->filter(fn($v) => $v['products']->isNotEmpty() || !empty($v['banner_url']))
             ->values();
 
         return response()->json($vendors);
@@ -48,7 +57,7 @@ class OrderController extends Controller
         $request->validate([
             'items'             => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'uuid', 'exists:products,id'],
-            'items.*.quantity'  => ['required', 'numeric', 'min:0.001'],
+            'items.*.quantity'  => ['required', 'integer', 'min:1'],
         ]);
 
         // Group cart items by vendor so we create one Order per vendor

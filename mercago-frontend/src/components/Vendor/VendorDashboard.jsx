@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { API_BASE_URL } from '../../config'
 import { extractError } from '../../utils/error'
 import StatusBadge from '../UI/StatusBadge'
+import EditProfileModal from '../UI/EditProfileModal'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -37,36 +38,20 @@ const emptyProductForm = {
   image: null,
 }
 
-function VendorAnalytics({ vendorOrders, products }) {
-  const [chartView, setChartView] = useState('sales') // 'sales' | 'products'
+function VendorAnalytics({ vendorOrders }) {
+  const [chartView, setChartView] = useState('sales') // 'sales' | 'products' | 'calendar'
+  const [selectedProduct, setSelectedProduct] = useState(null)
   const [dateRange, setDateRange] = useState(14) // 7 | 14 | 30
   const [barMetric, setBarMetric] = useState('qty') // 'qty' | 'revenue'
   const chartRef = useRef(null)
-  const [selectedCategory, setSelectedCategory] = useState('All')
 
-  // Build product name → category lookup from products prop
-  const nameToCategory = {}
-  ;(Array.isArray(products) ? products : []).forEach(p => {
-    if (p.product_name && p.category) nameToCategory[p.product_name] = p.category
-  })
-
-  // Derive unique categories from vendor's actual products
-  const categories = [...new Set(
-    (Array.isArray(products) ? products : []).map(p => p.category).filter(Boolean)
-  )].sort()
-
-  // Filter orders by selected category at item level, recalculate totals
-  const filteredOrders = selectedCategory === 'All'
-    ? vendorOrders
-    : vendorOrders
-        .map(o => {
-          const matchingItems = o.items.filter(i =>
-            (nameToCategory[i.product_name] || '').toLowerCase() === selectedCategory.toLowerCase()
-          )
-          if (matchingItems.length === 0) return null
-          return { ...o, items: matchingItems, total_amount: matchingItems.reduce((s, i) => s + (parseFloat(i.subtotal) || 0), 0) }
-        })
-        .filter(Boolean)
+  // Calendar state
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth())
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear())
+  const [selectedCalDate, setSelectedCalDate] = useState(null)
+  const [calRangeStart, setCalRangeStart] = useState(null)
+  const [calRangeEnd, setCalRangeEnd] = useState(null)
+  const [calMode, setCalMode] = useState('single') // 'single' | 'range'
 
   // Helper: check if a date string falls within a date range
   const isInRange = (dateStr, startDate, endDate) => {
@@ -91,7 +76,7 @@ function VendorAnalytics({ vendorOrders, products }) {
   let rangeRevenue = 0, rangeOrders = 0, rangeItems = 0
   let prevRevenue = 0, prevOrders = 0, prevItems = 0
 
-  filteredOrders.forEach(o => {
+  vendorOrders.forEach(o => {
     const amt = parseFloat(o.total_amount) || 0
     const items = o.items.reduce((s, i) => s + (parseInt(i.quantity, 10) || 0), 0)
     if (isInRange(o.ordered_at, currentStart, now)) {
@@ -120,11 +105,27 @@ function VendorAnalytics({ vendorOrders, products }) {
 
   // Group sales by Date (format: YYYY-MM-DD)
   const salesByDate = {}
-  filteredOrders.forEach(o => {
+  vendorOrders.forEach(o => {
     const dStr = o.ordered_at ? o.ordered_at.split(' ')[0] : 'Unknown'
     if (!salesByDate[dStr]) salesByDate[dStr] = 0
     salesByDate[dStr] += parseFloat(o.total_amount) || 0
   })
+
+  // Group specific product sales by Date
+  const productSalesByDate = {}
+  const productQtyByDate = {}
+  if (selectedProduct) {
+    vendorOrders.forEach(o => {
+      const dStr = o.ordered_at ? o.ordered_at.split(' ')[0] : 'Unknown'
+      const matchedItem = o.items.find(i => i.product_name === selectedProduct)
+      if (matchedItem) {
+        if (!productSalesByDate[dStr]) productSalesByDate[dStr] = 0
+        if (!productQtyByDate[dStr]) productQtyByDate[dStr] = 0
+        productSalesByDate[dStr] += parseFloat(matchedItem.subtotal) || 0
+        productQtyByDate[dStr] += parseFloat(matchedItem.quantity) || 0
+      }
+    })
+  }
 
   // Build a continuous calendar-day range ending today, filling gaps with ₱0
   const buildContinuousRange = (days) => {
@@ -139,20 +140,30 @@ function VendorAnalytics({ vendorOrders, products }) {
   }
   const sortedDates = buildContinuousRange(dateRange).map(d => {
     if (!salesByDate[d]) salesByDate[d] = 0
+    if (selectedProduct) {
+      if (!productSalesByDate[d]) productSalesByDate[d] = 0
+      if (!productQtyByDate[d]) productQtyByDate[d] = 0
+    }
     return d
   })
 
-  // Top Products
+  // Top Products (respecting date range)
   const productTally = {}
-  filteredOrders.forEach(o => {
-    o.items.forEach(i => {
-      const name = i.product_name
-      if (!productTally[name]) productTally[name] = { qty: 0, rev: 0 }
-      productTally[name].qty += parseFloat(i.quantity) || 0
-      productTally[name].rev += parseFloat(i.subtotal) || 0
-    })
+  vendorOrders.forEach(o => {
+    if (isInRange(o.ordered_at, currentStart, now)) {
+      o.items.forEach(i => {
+        const name = i.product_name
+        if (!productTally[name]) productTally[name] = { qty: 0, rev: 0 }
+        productTally[name].qty += parseFloat(i.quantity) || 0
+        productTally[name].rev += parseFloat(i.subtotal) || 0
+      })
+    }
   })
-  const topProducts = Object.entries(productTally)
+
+  // Full list of products sold in the period
+  const allProductsSold = Object.entries(productTally).sort((a, b) => b[1].rev - a[1].rev)
+
+  const topProducts = [...allProductsSold]
     .sort((a, b) => b[1].qty - a[1].qty)
     .slice(0, 8)
 
@@ -183,6 +194,38 @@ function VendorAnalytics({ vendorOrders, products }) {
         },
         borderWidth: 2.5,
         pointBackgroundColor: '#3b82f6',
+        pointBorderColor: '#fff',
+        pointBorderWidth: 2,
+        pointRadius: dateRange <= 14 ? 5 : 3,
+        pointHoverRadius: 7,
+        tension: 0.35,
+        fill: true,
+      },
+    ],
+  }
+
+  // ── Chart Data: Specific Product Line Chart ──
+  const productLineData = {
+    labels: sortedDates.map(d => {
+      const parts = d.split('-')
+      return `${parts[1]}-${parts[2]}`
+    }),
+    datasets: [
+      {
+        label: `${selectedProduct} Revenue (₱)`,
+        data: sortedDates.map(d => productSalesByDate[d]),
+        borderColor: '#10b981',
+        backgroundColor: (context) => {
+          const { ctx, chartArea } = context.chart
+          if (!chartArea) return 'rgba(16, 185, 129, 0.1)'
+          const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom)
+          gradient.addColorStop(0, 'rgba(16, 185, 129, 0.28)')
+          gradient.addColorStop(0.6, 'rgba(16, 185, 129, 0.08)')
+          gradient.addColorStop(1, 'rgba(16, 185, 129, 0)')
+          return gradient
+        },
+        borderWidth: 2.5,
+        pointBackgroundColor: '#10b981',
         pointBorderColor: '#fff',
         pointBorderWidth: 2,
         pointRadius: dateRange <= 14 ? 5 : 3,
@@ -255,6 +298,30 @@ function VendorAnalytics({ vendorOrders, products }) {
     animation: {
       duration: 800,
       easing: 'easeOutQuart',
+    },
+  }
+
+  const productLineOptions = {
+    ...salesLineOptions,
+    plugins: {
+      ...salesLineOptions.plugins,
+      tooltip: {
+        backgroundColor: '#1e293b',
+        titleFont: { size: 13, weight: '600' },
+        bodyFont: { size: 12 },
+        padding: 12,
+        cornerRadius: 8,
+        callbacks: {
+          label: (ctx) => {
+            const dateStr = sortedDates[ctx.dataIndex]
+            return `Qty: ${productQtyByDate[dateStr] || 0}`
+          },
+          afterLabel: (ctx) => {
+            const dateStr = sortedDates[ctx.dataIndex]
+            return `Revenue: ₱${(productSalesByDate[dateStr] || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+          }
+        },
+      },
     },
   }
 
@@ -369,34 +436,35 @@ function VendorAnalytics({ vendorOrders, products }) {
     },
   }
 
-  // Export CSV
+  // Export CSV — one row per line item for a proper sales report
   const handleExportCSV = () => {
-    let csvContent = "\uFEFF" // Add BOM for Excel UTF-8 support
-    csvContent += "Order ID,Date,Shopper,Delivery Status,Product Name,Category,Quantity,Unit Price,Subtotal\n"
-    
-    filteredOrders.forEach(o => {
+    let csvContent = "data:text/csv;charset=utf-8,"
+    csvContent += "Order ID,Date,Shopper,Shopper Email,Product,Qty,Unit Price (PHP),Subtotal (PHP),Order Total (PHP),Delivery Status\n"
+
+    vendorOrders.forEach(o => {
       o.items.forEach(item => {
-        const category = nameToCategory[item.product_name] || 'N/A'
-        const escapeCsv = (str) => `"${String(str || '').replace(/"/g, '""')}"`
+        // Wrap string fields in quotes to safely handle commas in names
         const row = [
           o.order_id,
-          escapeCsv(o.ordered_at),
-          escapeCsv(o.shopper_name),
-          o.delivery_status,
-          escapeCsv(item.product_name),
-          escapeCsv(category),
+          o.ordered_at,
+          `"${o.shopper_name}"`,
+          `"${o.shopper_email}"`,
+          `"${item.product_name}"`,
           item.quantity,
-          item.unit_price,
-          item.subtotal
+          Number(item.unit_price).toFixed(2),
+          Number(item.subtotal).toFixed(2),
+          Number(o.total_amount).toFixed(2),
+          o.delivery_status,
         ]
         csvContent += row.join(",") + "\n"
       })
     })
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const encodedUri = encodeURI(csvContent)
     const link = document.createElement("a")
-    link.href = URL.createObjectURL(blob)
-    link.setAttribute("download", `vendor_sales_report${selectedCategory !== 'All' ? '_' + selectedCategory : ''}.csv`)
+    link.setAttribute("href", encodedUri)
+    // Append today's date to the filename for traceability
+    link.setAttribute("download", `sales_report_${new Date().toISOString().split('T')[0]}.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -415,60 +483,12 @@ function VendorAnalytics({ vendorOrders, products }) {
   })
 
   return (
-    <div style={{ background: '#fff', padding: '24px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+    <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#111' }}>📊 System Report & Analytics</h3>
         <button onClick={handleExportCSV} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>
           📥 Export CSV
         </button>
-      </div>
-
-      {/* Category Filter Dropdown */}
-      <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <label htmlFor="categoryFilter" style={{ fontSize: '0.85rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-          Filter by Category:
-        </label>
-        <div style={{ position: 'relative' }}>
-          <select
-            id="categoryFilter"
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            style={{
-              appearance: 'none',
-              padding: '8px 36px 8px 16px',
-              fontSize: '0.9rem',
-              fontWeight: 500,
-              color: '#111',
-              background: '#fff',
-              border: '1px solid #d1d5db',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              outline: 'none',
-              minWidth: '160px',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-            }}
-          >
-            <option value="All">All Categories</option>
-            {categories.map(cat => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
-          {/* Custom Dropdown Arrow */}
-          <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#6b7280' }}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
-          </div>
-        </div>
-        
-        {selectedCategory !== 'All' && (
-          <button 
-            onClick={() => setSelectedCategory('All')} 
-            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500, textDecoration: 'underline' }}
-          >
-            Clear Filter
-          </button>
-        )}
       </div>
 
       {/* Summary Cards */}
@@ -506,16 +526,22 @@ function VendorAnalytics({ vendorOrders, products }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', gap: '8px', background: '#f8fafc', padding: '4px', borderRadius: '8px' }}>
             <button
-              onClick={() => setChartView('sales')}
+              onClick={() => { setChartView('sales'); setSelectedProduct(null); }}
               style={chartToggleStyle(chartView === 'sales')}
             >
               📈 Sales Chart
             </button>
             <button
-              onClick={() => setChartView('products')}
+              onClick={() => { setChartView('products'); setSelectedProduct(null); }}
               style={chartToggleStyle(chartView === 'products')}
             >
               📊 Top Products
+            </button>
+            <button
+              onClick={() => { setChartView('calendar'); setSelectedProduct(null); }}
+              style={chartToggleStyle(chartView === 'calendar')}
+            >
+              📅 Calendar
             </button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -568,39 +594,422 @@ function VendorAnalytics({ vendorOrders, products }) {
             <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
               {chartView === 'sales'
                 ? `Revenue over last ${dateRange} days`
+                : chartView === 'calendar'
+                ? 'Click a date to view daily product analytics'
                 : `Top ${sortedProducts.length} products by ${barMetric === 'qty' ? 'quantity sold' : 'revenue'}`}
             </span>
           </div>
         </div>
 
         {/* Charts */}
-        <div style={{ height: '320px', position: 'relative' }}>
+        <div style={{ minHeight: '320px', position: 'relative' }}>
           {chartView === 'sales' ? (
-            sortedDates.length === 0 ? (
+            <div style={{ height: '320px' }}>
+            {sortedDates.length === 0 ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af' }}>
                 <p>No sales data available yet.</p>
               </div>
             ) : (
               <Line data={salesLineData} options={salesLineOptions} plugins={[crosshairPlugin]} />
-            )
-          ) : (
-            topProducts.length === 0 ? (
+            )}
+            </div>
+          ) : chartView === 'products' ? (
+            <div style={{ height: '320px' }}>
+            {selectedProduct ? (
+              <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
+                  <h4 style={{ margin: 0, fontSize: '1.1rem', color: '#111' }}>📈 {selectedProduct} Sales Trend</h4>
+                  <button onClick={() => setSelectedProduct(null)} style={{ background: 'rgba(59,130,246,0.1)', border: 'none', color: '#3b82f6', cursor: 'pointer', fontWeight: 600, padding: '4px 12px', borderRadius: '6px' }}>← Back to All Products</button>
+                </div>
+                <div style={{ flex: 1, position: 'relative' }}>
+                  <Line data={productLineData} options={productLineOptions} plugins={[crosshairPlugin]} />
+                </div>
+              </div>
+            ) : topProducts.length === 0 ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af' }}>
                 <p>No products sold yet.</p>
               </div>
             ) : (
               <Bar data={productsBarData} options={productsBarOptions} plugins={[barLabelPlugin]} />
-            )
+            )}
+            </div>
+          ) : (
+            /* ── Calendar View ── */
+            (() => {
+              const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate()
+              const firstDayOfWeek = new Date(calendarYear, calendarMonth, 1).getDay()
+              const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December']
+              const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+
+              // Build daily revenue map for this month
+              const dailyRevMap = {}
+              let maxDayRev = 0
+              vendorOrders.forEach(o => {
+                const dStr = o.ordered_at ? o.ordered_at.split(' ')[0] : null
+                if (!dStr) return
+                const [y, m] = dStr.split('-').map(Number)
+                if (y === calendarYear && m === calendarMonth + 1) {
+                  if (!dailyRevMap[dStr]) dailyRevMap[dStr] = 0
+                  dailyRevMap[dStr] += parseFloat(o.total_amount) || 0
+                  if (dailyRevMap[dStr] > maxDayRev) maxDayRev = dailyRevMap[dStr]
+                }
+              })
+
+              // Selected date / range snapshot
+              const hasRange = calMode === 'range' && calRangeStart && calRangeEnd
+              const hasSingle = calMode === 'single' && selectedCalDate
+              const showSnapshot = hasRange || hasSingle
+
+              let snapOrders = [], snapRevenue = 0, snapItems = 0, snapProductMap = {}
+              if (showSnapshot) {
+                vendorOrders.forEach(o => {
+                  const dStr = o.ordered_at ? o.ordered_at.split(' ')[0] : null
+                  if (!dStr) return
+                  let match = false
+                  if (hasSingle) {
+                    match = dStr === selectedCalDate
+                  } else {
+                    match = dStr >= calRangeStart && dStr <= calRangeEnd
+                  }
+                  if (match) {
+                    snapOrders.push(o)
+                    snapRevenue += parseFloat(o.total_amount) || 0
+                    o.items.forEach(item => {
+                      const n = item.product_name
+                      if (!snapProductMap[n]) snapProductMap[n] = { qty: 0, rev: 0 }
+                      snapProductMap[n].qty += parseInt(item.quantity, 10) || 0
+                      snapProductMap[n].rev += parseFloat(item.subtotal) || 0
+                      snapItems += parseInt(item.quantity, 10) || 0
+                    })
+                  }
+                })
+              }
+              const snapProductList = Object.entries(snapProductMap).sort((a, b) => b[1].rev - a[1].rev)
+              const todayStr = new Date().toISOString().split('T')[0]
+
+              // Date click handler
+              const handleCalClick = (dateStr) => {
+                if (calMode === 'single') {
+                  setSelectedCalDate(dateStr === selectedCalDate ? null : dateStr)
+                } else {
+                  if (!calRangeStart || (calRangeStart && calRangeEnd)) {
+                    setCalRangeStart(dateStr)
+                    setCalRangeEnd(null)
+                  } else {
+                    if (dateStr < calRangeStart) {
+                      setCalRangeEnd(calRangeStart)
+                      setCalRangeStart(dateStr)
+                    } else if (dateStr === calRangeStart) {
+                      setCalRangeStart(null)
+                    } else {
+                      setCalRangeEnd(dateStr)
+                    }
+                  }
+                }
+              }
+
+              // Check if a date is in the selected range
+              const isInSelectedRange = (dateStr) => {
+                if (calMode !== 'range') return false
+                if (calRangeStart && calRangeEnd) return dateStr >= calRangeStart && dateStr <= calRangeEnd
+                return dateStr === calRangeStart
+              }
+
+              return (
+                <div>
+                  {/* Mode Toggle + Month Navigation */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                    <div style={{ display: 'flex', gap: '4px', background: '#f1f5f9', padding: '3px', borderRadius: '6px' }}>
+                      <button onClick={() => { setCalMode('single'); setCalRangeStart(null); setCalRangeEnd(null) }} style={{ padding: '5px 14px', fontSize: '0.78rem', fontWeight: 600, border: 'none', borderRadius: '4px', cursor: 'pointer', transition: 'all 0.2s', background: calMode === 'single' ? '#3b82f6' : 'transparent', color: calMode === 'single' ? '#fff' : '#94a3b8' }}>📌 Single Day</button>
+                      <button onClick={() => { setCalMode('range'); setSelectedCalDate(null) }} style={{ padding: '5px 14px', fontSize: '0.78rem', fontWeight: 600, border: 'none', borderRadius: '4px', cursor: 'pointer', transition: 'all 0.2s', background: calMode === 'range' ? '#8b5cf6' : 'transparent', color: calMode === 'range' ? '#fff' : '#94a3b8' }}>📅 Date Range</button>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <button onClick={() => { if (calendarMonth === 0) { setCalendarMonth(11); setCalendarYear(y => y - 1) } else setCalendarMonth(m => m - 1) }} style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px 14px', cursor: 'pointer', fontWeight: 600, color: '#475569', fontSize: '1rem' }}>◀</button>
+                      <h4 style={{ margin: 0, fontSize: '1.15rem', color: '#111', fontWeight: 700 }}>{monthNames[calendarMonth]} {calendarYear}</h4>
+                      <button onClick={() => { if (calendarMonth === 11) { setCalendarMonth(0); setCalendarYear(y => y + 1) } else setCalendarMonth(m => m + 1) }} style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '6px 14px', cursor: 'pointer', fontWeight: 600, color: '#475569', fontSize: '1rem' }}>▶</button>
+                    </div>
+                  </div>
+
+                  {/* Range hint */}
+                  {calMode === 'range' && (
+                    <div style={{ marginBottom: '12px', padding: '8px 14px', background: calRangeStart && !calRangeEnd ? '#fef3c7' : calRangeStart && calRangeEnd ? '#ecfdf5' : '#f0f9ff', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 500, color: calRangeStart && !calRangeEnd ? '#92400e' : calRangeStart && calRangeEnd ? '#065f46' : '#1e40af', border: `1px solid ${calRangeStart && !calRangeEnd ? '#fde68a' : calRangeStart && calRangeEnd ? '#a7f3d0' : '#bfdbfe'}` }}>
+                      {!calRangeStart ? '👆 Click a start date' : !calRangeEnd ? `📍 Start: ${calRangeStart} — now click an end date` : `✅ Range: ${calRangeStart} → ${calRangeEnd}`}
+                      {(calRangeStart || calRangeEnd) && (
+                        <button onClick={() => { setCalRangeStart(null); setCalRangeEnd(null) }} style={{ marginLeft: '12px', background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontWeight: 700, fontSize: '0.8rem' }}>✕ Clear</button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Calendar Grid */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px' }}>
+                    {dayNames.map(d => (
+                      <div key={d} style={{ textAlign: 'center', fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', padding: '6px 0', textTransform: 'uppercase' }}>{d}</div>
+                    ))}
+                    {Array.from({ length: firstDayOfWeek }).map((_, i) => (
+                      <div key={`empty-${i}`} />
+                    ))}
+                    {Array.from({ length: daysInMonth }).map((_, i) => {
+                      const day = i + 1
+                      const dateStr = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+                      const rev = dailyRevMap[dateStr] || 0
+                      const intensity = maxDayRev > 0 ? Math.min(rev / maxDayRev, 1) : 0
+                      const isToday = dateStr === todayStr
+                      const isSelected = calMode === 'single' && dateStr === selectedCalDate
+                      const isRangeSelected = isInSelectedRange(dateStr)
+                      const isRangeEdge = dateStr === calRangeStart || dateStr === calRangeEnd
+                      const isFuture = new Date(dateStr) > new Date()
+
+                      return (
+                        <div
+                          key={day}
+                          onClick={() => !isFuture && handleCalClick(dateStr)}
+                          style={{
+                            position: 'relative',
+                            padding: '8px 4px',
+                            minHeight: '52px',
+                            borderRadius: '8px',
+                            cursor: isFuture ? 'default' : 'pointer',
+                            opacity: isFuture ? 0.35 : 1,
+                            transition: 'all 0.2s',
+                            border: isSelected ? '2px solid #3b82f6' : isRangeEdge ? '2px solid #8b5cf6' : isRangeSelected ? '1px solid #c4b5fd' : isToday ? '2px solid #10b981' : '1px solid #e5e7eb',
+                            background: isSelected ? 'rgba(59,130,246,0.08)' : isRangeEdge ? 'rgba(139,92,246,0.15)' : isRangeSelected ? 'rgba(139,92,246,0.06)' : rev > 0 ? `rgba(59,130,246,${0.04 + intensity * 0.18})` : '#fafafa',
+                            textAlign: 'center',
+                          }}
+                          onMouseEnter={e => { if (!isFuture) e.currentTarget.style.transform = 'scale(1.04)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)' }}
+                          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none' }}
+                        >
+                          <div style={{ fontSize: '0.85rem', fontWeight: isToday || isSelected || isRangeEdge ? 800 : 500, color: isSelected ? '#3b82f6' : isRangeEdge ? '#7c3aed' : isRangeSelected ? '#6d28d9' : isToday ? '#10b981' : '#374151' }}>{day}</div>
+                          {rev > 0 && (
+                            <div style={{ fontSize: '0.6rem', fontWeight: 700, color: isRangeSelected ? '#7c3aed' : '#3b82f6', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>₱{rev >= 1000 ? `${(rev/1000).toFixed(1)}k` : rev.toFixed(0)}</div>
+                          )}
+                          {rev > 0 && (
+                            <div style={{ position: 'absolute', bottom: '3px', left: '50%', transform: 'translateX(-50%)', width: `${12 + intensity * 20}px`, height: '3px', borderRadius: '2px', background: isRangeSelected ? `rgba(139,92,246,${0.3 + intensity * 0.7})` : `rgba(59,130,246,${0.3 + intensity * 0.7})` }} />
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Legend */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px', justifyContent: 'center' }}>
+                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Less</span>
+                    {[0.05, 0.1, 0.15, 0.2, 0.25].map((op, i) => (
+                      <div key={i} style={{ width: '14px', height: '14px', borderRadius: '3px', background: `rgba(59,130,246,${op})`, border: '1px solid rgba(59,130,246,0.15)' }} />
+                    ))}
+                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>More Revenue</span>
+                  </div>
+
+                  {/* Snapshot Panel */}
+                  {showSnapshot && (
+                    <div style={{ marginTop: '24px', animation: 'slideFadeIn 0.3s ease-out' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+                        <h4 style={{ margin: 0, fontSize: '1.1rem', color: '#111' }}>
+                          {hasRange ? '📊' : '📋'} {hasRange ? 'Range Analytics' : 'Daily Snapshot'} — {hasRange
+                            ? `${new Date(calRangeStart + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} → ${new Date(calRangeEnd + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+                            : new Date(selectedCalDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                        </h4>
+                        <button onClick={() => { setSelectedCalDate(null); setCalRangeStart(null); setCalRangeEnd(null) }} style={{ background: 'rgba(59,130,246,0.1)', border: 'none', color: '#3b82f6', cursor: 'pointer', fontWeight: 600, padding: '4px 12px', borderRadius: '6px', fontSize: '0.8rem' }}>✕ Close</button>
+                      </div>
+
+                      {/* Summary Cards */}
+                      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
+                        {[
+                          { label: 'Revenue', value: `₱${snapRevenue.toFixed(2)}`, icon: '💰', color: '#3b82f6' },
+                          { label: 'Orders', value: snapOrders.length, icon: '🛒', color: '#8b5cf6' },
+                          { label: 'Items Sold', value: snapItems, icon: '📦', color: '#10b981' },
+                          { label: 'Products', value: snapProductList.length, icon: '🏷️', color: '#f59e0b' },
+                          ...(hasRange ? [{ label: 'Avg/Day', value: `₱${(() => { const d1 = new Date(calRangeStart); const d2 = new Date(calRangeEnd); const days = Math.max(1, Math.round((d2 - d1) / 86400000) + 1); return (snapRevenue / days).toFixed(2) })()}`, icon: '📈', color: '#06b6d4' }] : []),
+                        ].map((c, i) => (
+                          <div key={i} style={{ flex: '1 1 120px', background: '#f8fafc', padding: '14px', borderRadius: '8px', borderLeft: `3px solid ${c.color}` }}>
+                            <div style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase' }}>{c.icon} {c.label}</div>
+                            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#111', marginTop: '4px' }}>{c.value}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Product Breakdown Table */}
+                      {snapProductList.length > 0 ? (
+                        <div className="table-wrap">
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Product</th>
+                                <th>Qty Sold</th>
+                                <th>Revenue</th>
+                                <th>% of Total</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {snapProductList.map(([name, data]) => (
+                                <tr key={name}>
+                                  <td style={{ fontWeight: 600, color: '#334155' }}>{name}</td>
+                                  <td>{data.qty}</td>
+                                  <td style={{ fontWeight: 700, color: '#111' }}>₱{data.rev.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                  <td>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                      <div style={{ flex: 1, height: '6px', background: '#e5e7eb', borderRadius: '3px', maxWidth: '80px' }}>
+                                        <div style={{ width: `${snapRevenue > 0 ? (data.rev / snapRevenue * 100) : 0}%`, height: '100%', background: hasRange ? '#8b5cf6' : '#3b82f6', borderRadius: '3px', transition: 'width 0.5s' }} />
+                                      </div>
+                                      <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>{snapRevenue > 0 ? (data.rev / snapRevenue * 100).toFixed(1) : 0}%</span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div style={{ textAlign: 'center', color: '#9ca3af', padding: '24px', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #e2e8f0' }}>
+                          <p style={{ margin: 0, fontSize: '0.95rem' }}>📭 No sales recorded {hasRange ? 'in this range' : 'on this date'}.</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })()
           )}
         </div>
+
+        {chartView === 'products' && allProductsSold.length > 0 && (
+          <div style={{ marginTop: '2.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', background: '#f8fafc', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '16px' }}>
+              <div>
+                <span style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Period Summary ({dateRange} Days)</span>
+                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#111', marginTop: '4px' }}>
+                  {allProductsSold.length} Unique Products
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Total Items Sold</span>
+                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#10b981', marginTop: '4px' }}>
+                  {allProductsSold.reduce((sum, [_, data]) => sum + data.qty, 0)} items
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 600 }}>Total Revenue generated</span>
+                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#3b82f6', marginTop: '4px' }}>
+                  ₱{allProductsSold.reduce((sum, [_, data]) => sum + data.rev, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </div>
+              </div>
+            </div>
+
+            <h4 style={{ margin: '0 0 16px', fontSize: '1.1rem', color: '#111' }}>Full List of Products Sold</h4>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Product Name</th>
+                    <th>Quantity Sold</th>
+                    <th>Total Revenue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allProductsSold.map(([name, data]) => (
+                    <tr 
+                      key={name}
+                      onClick={() => { setChartView('products'); setSelectedProduct(name); window.scrollTo({top: 0, behavior: 'smooth'}); }}
+                      style={{ cursor: 'pointer', transition: 'background 0.2s' }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                      title={`View sales chart for ${name}`}
+                    >
+                      <td style={{ fontWeight: 600, color: '#334155' }}>{name}</td>
+                      <td>{data.qty}</td>
+                      <td style={{ fontWeight: 700, color: '#111' }}>₱{data.rev.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
+
+    {/* ── Activity Log ── */}
+    <div style={{ background: '#fff', padding: '24px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', marginTop: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#111' }}>🕑 Activity Log</h3>
+        <span style={{ fontSize: '0.78rem', color: '#94a3b8', background: '#f1f5f9', padding: '4px 10px', borderRadius: '12px' }}>
+          System-generated · {vendorOrders.length} events
+        </span>
+      </div>
+
+      {vendorOrders.length === 0 ? (
+        <p style={{ color: '#9ca3af', textAlign: 'center', padding: '24px 0', margin: 0 }}>No activity yet.</p>
+      ) : (
+        <div style={{ maxHeight: '360px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          {/* One log entry per order, sorted newest-first, max 50 */}
+          {[...vendorOrders]
+            .sort((a, b) => new Date(b.ordered_at) - new Date(a.ordered_at))
+            .slice(0, 50)
+            .map((o, idx) => {
+              // Map delivery_status → icon + label + color
+              const statusMap = {
+                finding_rider: { icon: '🔍', label: 'Finding Rider', color: '#f59e0b', bg: '#fffbeb' },
+                found_rider:   { icon: '🏍️', label: 'Rider Found',   color: '#3b82f6', bg: '#eff6ff' },
+                ongoing:       { icon: '🚴', label: 'On the Way',    color: '#8b5cf6', bg: '#f5f3ff' },
+                delivered:     { icon: '✅', label: 'Delivered',     color: '#10b981', bg: '#ecfdf5' },
+                cancelled:     { icon: '❌', label: 'Cancelled',     color: '#ef4444', bg: '#fef2f2' },
+              }
+              const s = statusMap[o.delivery_status] || { icon: '📋', label: o.delivery_status, color: '#6b7280', bg: '#f9fafb' }
+              const itemSummary = o.items.map(i => `${i.product_name} ×${i.quantity}`).join(', ')
+
+              return (
+                <div
+                  key={o.order_id + idx}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: '12px',
+                    padding: '10px 12px', borderRadius: '8px',
+                    background: idx % 2 === 0 ? '#fafafa' : '#fff',
+                    border: '1px solid #f1f5f9',
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                  onMouseLeave={e => e.currentTarget.style.background = idx % 2 === 0 ? '#fafafa' : '#fff'}
+                >
+                  {/* Status icon bubble */}
+                  <div style={{ flexShrink: 0, width: 36, height: 36, borderRadius: '50%', background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', border: `1px solid ${s.color}22` }}>
+                    {s.icon}
+                  </div>
+
+                  {/* Event description */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#111', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      🛒 Order from <span style={{ color: '#3b82f6' }}>{o.shopper_name}</span>
+                      <span style={{ fontWeight: 400, color: '#6b7280' }}> — </span>
+                      <span style={{ color: '#059669', fontWeight: 700 }}>₱{Number(o.total_amount).toFixed(2)}</span>
+                    </div>
+                    <div style={{ fontSize: '0.775rem', color: '#6b7280', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {itemSummary}
+                    </div>
+                  </div>
+
+                  {/* Status badge + timestamp */}
+                  <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: s.color, background: s.bg, padding: '2px 8px', borderRadius: '10px', border: `1px solid ${s.color}33`, whiteSpace: 'nowrap' }}>
+                      {s.label}
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: '4px', whiteSpace: 'nowrap' }}>
+                      {o.ordered_at}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+        </div>
+      )}
     </div>
+    </>
   )
 }
 
 export default function VendorDashboard({ currentUser, token, onLogout }) {
   const [vendorTab, setVendorTab] = useState('analytics')
   
+  const [showProfileModal, setShowProfileModal] = useState(false)
+  const [user, setUser] = useState(currentUser)
+
   // Product State
   const [products, setProducts] = useState([])
   const [productsLoading, setProductsLoading] = useState(false)
@@ -613,6 +1022,16 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
   const [vendorOrders, setVendorOrders] = useState([])
   const [salesFilter, setSalesFilter] = useState('all') // 'all' | delivery_status values
   const [lowStockDismissed, setLowStockDismissed] = useState(false)
+
+  // Banner Profile State
+  const [bannerFile, setBannerFile] = useState(null)
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false)
+  const [bannerError, setBannerError] = useState('')
+  const [bannerSuccess, setBannerSuccess] = useState('')
+
+  // Reviews State
+  const [myReviews, setMyReviews] = useState([])
+  const [myAvgRating, setMyAvgRating] = useState(0)
 
   const authHeaders = {
     Authorization: `Bearer ${token}`,
@@ -699,10 +1118,50 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
     } catch { setProductError('Unable to delete product.') }
   }
 
+  const handleBannerUpload = async (e) => {
+    e.preventDefault()
+    if (!bannerFile) return
+    setIsUploadingBanner(true)
+    setBannerError('')
+    setBannerSuccess('')
+
+    const formData = new FormData()
+    formData.append('banner', bannerFile)
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/profile/banner`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      })
+      if (!res.ok) { setBannerError(await extractError(res)); return }
+      const data = await res.json()
+      setBannerSuccess('Banner updated successfully!')
+      localStorage.setItem('mercago_user', JSON.stringify(data.user))
+      currentUser.banner_url = data.user.banner_url
+    } catch {
+      setBannerError('Unable to upload banner.')
+    } finally {
+      setIsUploadingBanner(false)
+    }
+  }
+
+  const fetchVendorReviews = async () => {
+    if (!token) return
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/vendor/reviews`, { headers: authHeaders })
+      if (!res.ok) return
+      const d = await res.json()
+      setMyReviews(d.reviews || [])
+      setMyAvgRating(d.avg_rating || 0)
+    } catch { /* silent */ }
+  }
+
   useEffect(() => {
     if (!token) return
     fetchProducts()
     fetchVendorOrders()
+    fetchVendorReviews()
   }, [token])
 
   return (
@@ -711,16 +1170,30 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
         <div>
           <h2>Vendor Dashboard</h2>
           <p style={{ margin: '2px 0 0', fontSize: '0.9rem', opacity: 0.7 }}>
-            {currentUser.first_name} {currentUser.last_name} &bull; <em>vendor</em>
+            {user.first_name} {user.last_name} &bull; <em>vendor</em>
           </p>
         </div>
-        <button type="button" className="secondary-btn" onClick={onLogout}>Logout</button>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button type="button" className="secondary-btn" onClick={() => setShowProfileModal(true)}>Edit Profile</button>
+          <button type="button" className="secondary-btn" onClick={onLogout}>Logout</button>
+        </div>
       </div>
+
+      {showProfileModal && (
+        <EditProfileModal
+          currentUser={user}
+          token={token}
+          API_BASE_URL={API_BASE_URL}
+          onClose={() => setShowProfileModal(false)}
+          onUpdate={(updatedUser) => setUser(updatedUser)}
+        />
+      )}
 
       <div className="tabs" style={{ marginBottom: '1.5rem' }}>
         <button className={vendorTab === 'analytics' ? 'tab active' : 'tab'} type="button" onClick={() => { setVendorTab('analytics'); fetchVendorOrders() }}>Analytics</button>
         <button className={vendorTab === 'products' ? 'tab active' : 'tab'} type="button" onClick={() => setVendorTab('products')}>My Products</button>
         <button className={vendorTab === 'sales' ? 'tab active' : 'tab'} type="button" onClick={() => { setVendorTab('sales'); fetchVendorOrders() }}>Sales History</button>
+        <button className={vendorTab === 'profile' ? 'tab active' : 'tab'} type="button" onClick={() => setVendorTab('profile')}>Store Profile</button>
       </div>
 
       {vendorTab === 'analytics' && (
@@ -767,7 +1240,7 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
               </div>
             </div>
           )}
-          <VendorAnalytics vendorOrders={vendorOrders} products={products} />
+          <VendorAnalytics vendorOrders={vendorOrders} />
         </>
       )}
 
@@ -779,19 +1252,7 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
             <label>Product Name<input type="text" value={productForm.product_name} onChange={(e) => setProductForm((p) => ({ ...p, product_name: e.target.value }))} required /></label>
             <label>Category<input type="text" value={productForm.category} onChange={(e) => setProductForm((p) => ({ ...p, category: e.target.value }))} required /></label>
             <label>Price<input type="number" min="0" step="0.01" value={productForm.price} onChange={(e) => setProductForm((p) => ({ ...p, price: e.target.value }))} required /></label>
-            <label>
-              Unit
-              <select value={productForm.unit} onChange={(e) => setProductForm((p) => ({ ...p, unit: e.target.value }))} required style={{ background: '#fff' }}>
-                <option value="" disabled>Select unit...</option>
-                <option value="kg">kg (Kilogram)</option>
-                <option value="g">g (Gram)</option>
-                <option value="pcs">pcs (Pieces)</option>
-                <option value="pack">pack</option>
-                <option value="tray">tray</option>
-                <option value="box">box</option>
-                <option value="bunch">bunch</option>
-              </select>
-            </label>
+            <label>Unit<input type="text" value={productForm.unit} onChange={(e) => setProductForm((p) => ({ ...p, unit: e.target.value }))} required /></label>
             <label>Stock<input type="number" min="0" step="1" value={productForm.stock_qty} onChange={(e) => setProductForm((p) => ({ ...p, stock_qty: e.target.value }))} required /></label>
             <label>Product Image<input id="productImageInput" type="file" accept="image/*" onChange={(e) => setProductForm((p) => ({ ...p, image: e.target.files[0] }))} /></label>
             <div className="actions">
@@ -931,6 +1392,68 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
             )
           })()}
         </>
+      )}
+
+      {vendorTab === 'profile' && (
+        <div style={{ maxWidth: 600 }}>
+          <h3 style={{ marginBottom: '1rem' }}>Store Profile</h3>
+          <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '1.5rem' }}>
+            <h4 style={{ margin: '0 0 1rem' }}>Store Banner</h4>
+            <p style={{ color: '#6b7280', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              Upload a banner to display on the marketplace home page. Recommended size: 1200x300. Max size: 5MB.
+            </p>
+            
+            {currentUser.banner_url && (
+              <div style={{ marginBottom: '1rem' }}>
+                <p style={{ fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>Current Banner:</p>
+                <img src={`${API_BASE_URL}${currentUser.banner_url}`} alt="Current Banner" style={{ width: '100%', height: 'auto', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
+              </div>
+            )}
+
+            {bannerError && <div className="error-msg" style={{ marginBottom: '1rem' }}>{bannerError}</div>}
+            {bannerSuccess && <div style={{ color: '#059669', background: '#ecfdf5', padding: '10px', borderRadius: '4px', marginBottom: '1rem', fontSize: '0.9rem' }}>{bannerSuccess}</div>}
+
+            <form onSubmit={handleBannerUpload}>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={(e) => setBannerFile(e.target.files[0])} 
+                  required 
+                />
+              </div>
+              <button type="submit" disabled={isUploadingBanner || !bannerFile}>
+                {isUploadingBanner ? 'Uploading...' : 'Upload Banner'}
+              </button>
+            </form>
+          </div>
+
+          <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '1.5rem', marginTop: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h4 style={{ margin: 0 }}>Store Reviews</h4>
+              <span style={{ background: '#fef3c7', color: '#b45309', padding: '4px 8px', borderRadius: '4px', fontSize: '0.85rem', fontWeight: 600 }}>
+                ★ {myAvgRating > 0 ? myAvgRating : 'New'}
+              </span>
+            </div>
+            
+            {myReviews.length === 0 ? (
+              <p style={{ color: '#6b7280', fontSize: '0.9rem', fontStyle: 'italic' }}>No reviews yet.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {myReviews.map(review => (
+                  <div key={review.id} style={{ borderBottom: '1px solid #e5e7eb', paddingBottom: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <strong style={{ fontSize: '0.9rem', color: '#111' }}>{review.user?.first_name} {review.user?.last_name}</strong>
+                      <span style={{ color: '#f59e0b', fontSize: '0.9rem' }}>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</span>
+                    </div>
+                    {review.comment && <p style={{ margin: 0, fontSize: '0.9rem', color: '#475569' }}>{review.comment}</p>}
+                    <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '4px' }}>{new Date(review.created_at).toLocaleDateString()}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </section>
   )
