@@ -133,7 +133,7 @@ export default function RiderDashboard({ currentUser, token, onLogout }) {
   }, [token])
 
   const outstanding = ledger?.outstanding ?? 0
-  const maxAbono = ledger?.max_abono ?? user?.max_abono ?? 500
+  const maxAbono = ledger?.cap ?? user?.max_abono ?? 500
 
   return (
     <section>
@@ -252,8 +252,8 @@ export default function RiderDashboard({ currentUser, token, onLogout }) {
           }}>
             {[
               { label: 'Outstanding Balance', value: `₱${Number(outstanding).toFixed(2)}`, color: outstanding > 0 ? '#dc2626' : '#059669', bg: outstanding > 0 ? '#fef2f2' : '#f0fdf4', icon: '💸' },
-              { label: 'Total Advanced', value: `₱${Number(ledger?.total_advances ?? 0).toFixed(2)}`, color: '#9333ea', bg: '#faf5ff', icon: '📤' },
-              { label: 'Total Collected', value: `₱${Number(ledger?.total_collections ?? 0).toFixed(2)}`, color: '#059669', bg: '#f0fdf4', icon: '📥' },
+              { label: 'Total Advanced', value: `₱${Number(ledger?.total_advanced ?? 0).toFixed(2)}`, color: '#9333ea', bg: '#faf5ff', icon: '📤' },
+              { label: 'Total Collected', value: `₱${Number(ledger?.total_collected ?? 0).toFixed(2)}`, color: '#059669', bg: '#f0fdf4', icon: '📥' },
               { label: 'Abono Cap', value: `₱${Number(maxAbono).toFixed(2)}`, color: outstanding >= maxAbono ? '#dc2626' : '#2563eb', bg: '#eff6ff', icon: '🏦' },
             ].map(card => (
               <div key={card.label} style={{ background: card.bg, border: `1px solid ${card.color}30`, borderRadius: 10, padding: '1rem', textAlign: 'center' }}>
@@ -300,7 +300,7 @@ export default function RiderDashboard({ currentUser, token, onLogout }) {
 
           {/* Ledger History */}
           <h4 style={{ margin: '0 0 10px' }}>📒 Transaction History</h4>
-          {!ledger || ledger.entries.length === 0
+          {!ledger || !ledger.transactions || ledger.transactions.length === 0
             ? <p className="empty-note">No abono transactions yet. Accept and complete an order to see entries here.</p>
             : (
               <div className="table-wrap">
@@ -314,7 +314,7 @@ export default function RiderDashboard({ currentUser, token, onLogout }) {
                     </tr>
                   </thead>
                   <tbody>
-                    {ledger.entries.map(entry => (
+                    {ledger.transactions.map(entry => (
                       <tr key={entry.id}>
                         <td style={{ fontSize: '0.85rem', color: '#6b7280' }}>{entry.created_at}</td>
                         <td>
