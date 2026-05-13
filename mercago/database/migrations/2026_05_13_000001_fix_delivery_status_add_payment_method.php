@@ -10,7 +10,8 @@ use Illuminate\Support\Facades\Schema;
  *  1. The previous migration used MySQL-only ALTER TABLE MODIFY syntax which
  *     silently failed on SQLite, leaving 'found_rider' absent from the CHECK
  *     constraint → causing the SQLSTATE[23000] error on accept.
- *  2. Adds payment_method (cod|online) so only COD orders reduce rider deposit.
+ *  2. Adds payment_method (cod|online) and payment_status (pending|collected|settled)
+ *     columns so orders can be placed and completed without missing-column errors.
  */
 return new class extends Migration
 {
@@ -33,7 +34,9 @@ return new class extends Migration
                 "delivery_status" varchar NOT NULL DEFAULT \'finding_rider\'
                     CHECK("delivery_status" IN (\'finding_rider\',\'found_rider\',\'ongoing\',\'completed\',\'cancelled\')),
                 "payment_method"  varchar NOT NULL DEFAULT \'cod\'
-                    CHECK("payment_method" IN (\'cod\',\'online\')),
+                    CHECK("payment_method" IN (\'cod\',\'online\',\'gcash\',\'maya\',\'card\')),
+                "payment_status"  varchar NOT NULL DEFAULT \'pending\'
+                    CHECK("payment_status" IN (\'pending\',\'collected\',\'settled\')),
                 "created_at"      datetime,
                 "updated_at"      datetime,
                 PRIMARY KEY ("id"),
@@ -42,12 +45,15 @@ return new class extends Migration
                 FOREIGN KEY ("rider_id")   REFERENCES "users"("id") ON DELETE SET NULL
             )');
 
-            DB::statement('INSERT INTO "orders_new"
-                SELECT "id","shopper_id","vendor_id","rider_id",
-                       "total_amount","status","delivery_status",
-                       \'cod\' AS "payment_method",
-                       "created_at","updated_at"
-                FROM "orders"');
+            // Detect which columns exist in the old table
+            $cols = collect(DB::select('PRAGMA table_info("orders")'))->pluck('name');
+
+            $select = '"id","shopper_id","vendor_id","rider_id","total_amount","status","delivery_status"';
+            $select .= $cols->contains('payment_method') ? ',"payment_method"' : ',\'cod\' AS "payment_method"';
+            $select .= $cols->contains('payment_status')  ? ',"payment_status"'  : ',\'pending\' AS "payment_status"';
+            $select .= ',"created_at","updated_at"';
+
+            DB::statement("INSERT INTO \"orders_new\" SELECT {$select} FROM \"orders\"");
 
             DB::statement('DROP TABLE "orders"');
             DB::statement('ALTER TABLE "orders_new" RENAME TO "orders"');
@@ -60,15 +66,20 @@ return new class extends Migration
                 NOT NULL DEFAULT 'finding_rider'");
 
             Schema::table('orders', function (Blueprint $table) {
-                $table->enum('payment_method', ['cod', 'online'])
-                    ->default('cod')
-                    ->after('delivery_status');
+                if (!Schema::hasColumn('orders', 'payment_method')) {
+                    $table->enum('payment_method', ['cod', 'online', 'gcash', 'maya', 'card'])
+                        ->default('cod')->after('delivery_status');
+                }
+                if (!Schema::hasColumn('orders', 'payment_status')) {
+                    $table->enum('payment_status', ['pending', 'collected', 'settled'])
+                        ->default('pending')->after('payment_method');
+                }
             });
         }
     }
 
     public function down(): void
     {
-        // For simplicity, down() is a no-op in this dev environment.
+        // No-op for dev environment
     }
 };

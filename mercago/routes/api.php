@@ -57,7 +57,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/rider/orders/{id}/decline', [RiderController::class, 'declineOrder']);
         Route::post('/rider/orders/{id}/complete', [RiderController::class, 'completeDelivery']);
         Route::get('/rider/my-deliveries', [RiderController::class, 'myDeliveries']);
-        Route::get('/rider/ledger', [RiderController::class, 'ledger']);                // Abono ledger
+        Route::get('/rider/ledger', [RiderController::class, 'ledger']);                     // Abono ledger
         Route::put('/rider/abono-settings', [RiderController::class, 'updateAbonoSettings']); // Update cap
+        // Aliases used by the frontend RiderDashboard
+        Route::get('/rider/abono', [RiderController::class, 'ledger']);
+        Route::post('/rider/abono/deposit', [RiderController::class, 'abonoDeposit']);
+        Route::put('/rider/abono/cap', [RiderController::class, 'updateAbonoSettings']);
     });
 });

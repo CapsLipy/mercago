@@ -90,8 +90,21 @@ class RiderController extends Controller
 
         $order = Order::with(['shopper', 'vendor', 'items'])->find($id);
 
+        // For COD: record the advance so outstanding balance is tracked
+        if ($order->payment_method === 'cod') {
+            RiderLedger::create([
+                'rider_id' => $user->id,
+                'order_id' => $order->id,
+                'type'     => 'advance',
+                'amount'   => $order->total_amount,
+                'note'     => 'COD advance — order accepted',
+            ]);
+        }
+
         return response()->json([
-            'message' => 'Order accepted! Head to the vendor.',
+            'message' => $order->payment_method === 'cod'
+                ? 'COD order accepted! ₱' . number_format($order->total_amount, 2) . ' debited from your Abono.'
+                : 'Order accepted! Head to the vendor.',
             'order'   => $this->formatOrder($order),
         ]);
     }
@@ -166,53 +179,78 @@ class RiderController extends Controller
     }
 
     /**
-     * GET /api/rider/ledger
+     * GET /api/rider/ledger  (also aliased as GET /api/rider/abono)
      * Returns the rider's full abono ledger history and current balance.
      */
     public function ledger(Request $request)
     {
         $rider   = $request->user();
         $entries = RiderLedger::where('rider_id', $rider->id)
-            ->with('order')
             ->latest()
             ->get()
             ->map(fn($e) => [
                 'id'         => $e->id,
                 'type'       => $e->type,
-                'amount'     => $e->amount,
+                'amount'     => (float) $e->amount,
                 'note'       => $e->note,
                 'created_at' => $e->created_at->toDateTimeString(),
                 'order_id'   => $e->order_id,
             ]);
 
-        $totalAdvances    = RiderLedger::where('rider_id', $rider->id)->where('type', 'advance')->sum('amount');
-        $totalCollections = RiderLedger::where('rider_id', $rider->id)->where('type', 'collection')->sum('amount');
-        $outstanding      = $totalAdvances - $totalCollections;
+        $totalAdvanced  = (float) RiderLedger::where('rider_id', $rider->id)->where('type', 'advance')->sum('amount');
+        $totalCollected = (float) RiderLedger::where('rider_id', $rider->id)->where('type', 'collection')->sum('amount');
+        $outstanding    = $totalAdvanced - $totalCollected;
 
         return response()->json([
-            'max_abono'         => $rider->max_abono,
-            'total_advances'    => $totalAdvances,
-            'total_collections' => $totalCollections,
-            'outstanding'       => $outstanding,
-            'entries'           => $entries,
+            'cap'             => (float) $rider->max_abono,
+            'outstanding'     => $outstanding,
+            'total_advanced'  => $totalAdvanced,
+            'total_collected' => $totalCollected,
+            'transactions'    => $entries,
         ]);
     }
 
     /**
-     * PUT /api/rider/abono-settings
+     * PUT /api/rider/abono-settings  (also aliased as PUT /api/rider/abono/cap)
      * Rider updates their own max_abono cap.
      */
     public function updateAbonoSettings(Request $request)
     {
         $request->validate([
-            'max_abono' => ['required', 'numeric', 'min:1', 'max:10000'],
+            'cap' => ['sometimes', 'numeric', 'min:1', 'max:10000'],
+            'max_abono' => ['sometimes', 'numeric', 'min:1', 'max:10000'],
         ]);
 
-        $request->user()->update(['max_abono' => $request->max_abono]);
+        $cap = $request->input('cap', $request->input('max_abono'));
+        $request->user()->update(['max_abono' => $cap]);
 
         return response()->json([
-            'message'   => 'Abono limit updated successfully.',
-            'max_abono' => $request->user()->max_abono,
+            'message' => 'Abono cap updated to ₱' . number_format($cap, 2),
+            'cap'     => (float) $cap,
+        ]);
+    }
+
+    /**
+     * POST /api/rider/abono/deposit
+     * Rider increases their Abono cap by depositing funds.
+     */
+    public function abonoDeposit(Request $request)
+    {
+        $request->validate([
+            'amount' => ['required', 'numeric', 'min:1', 'max:50000'],
+        ]);
+
+        $amount = (float) $request->amount;
+        $rider  = $request->user();
+        $newCap = $rider->max_abono + $amount;
+
+        // Cap at 50,000 max
+        $newCap = min($newCap, 50000);
+        $rider->update(['max_abono' => $newCap]);
+
+        return response()->json([
+            'message' => '₱' . number_format($amount, 2) . ' deposited. New Abono cap: ₱' . number_format($newCap, 2),
+            'cap'     => (float) $newCap,
         ]);
     }
 
