@@ -101,7 +101,7 @@ function VendorReviews({ vendor, token, API_BASE_URL, currentUser, onReviewSubmi
 }
 
 // ── All Listings Sub-Component ──
-function AllListingsSection({ allProducts, loading, handleAddToCart, addedProductId, CATEGORIES, onProductClick }) {
+function AllListingsSection({ allProducts, loading, handleAddToCart, addedProductId, CATEGORIES, onProductClick, quantities, setQuantities }) {
   const [activeCat, setActiveCat] = useState('All')
 
   const displayed = activeCat === 'All'
@@ -112,7 +112,15 @@ function AllListingsSection({ allProducts, loading, handleAddToCart, addedProduc
     <div>
       <h2 style={{ margin: '0 0 16px', fontWeight: 600, fontSize: '1.2rem', color: '#111', textTransform: 'uppercase' }}>ALL LISTINGS</h2>
       {/* Category filter chips */}
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '24px' }}>
+      <div style={{ 
+        display: 'flex', 
+        gap: '8px', 
+        flexWrap: window.innerWidth <= 768 ? 'nowrap' : 'wrap', 
+        marginBottom: '24px',
+        overflowX: window.innerWidth <= 768 ? 'auto' : 'hidden',
+        paddingBottom: window.innerWidth <= 768 ? '8px' : '0',
+        WebkitOverflowScrolling: 'touch'
+      }}>
         {['All', ...CATEGORIES].map((cat) => (
           <button key={cat}
             onClick={() => setActiveCat(cat)}
@@ -125,7 +133,8 @@ function AllListingsSection({ allProducts, loading, handleAddToCart, addedProduc
               cursor: 'pointer',
               fontWeight: 500,
               fontSize: '0.85rem',
-              transition: 'all 0.15s'
+              transition: 'all 0.15s',
+              whiteSpace: 'nowrap'
             }}>
             {cat}
           </button>
@@ -135,7 +144,11 @@ function AllListingsSection({ allProducts, loading, handleAddToCart, addedProduc
       {!loading && displayed.length === 0 && (
         <p style={{ color: '#6b7280', fontSize: '0.9rem' }}>No products in this category yet.</p>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: window.innerWidth <= 768 ? 'repeat(auto-fill, minmax(150px, 1fr))' : 'repeat(auto-fill, minmax(220px, 1fr))', 
+        gap: window.innerWidth <= 768 ? '10px' : '16px' 
+      }}>
         {displayed.map((product) => (
           <div key={product.id}
             onClick={() => onProductClick(product)}
@@ -143,23 +156,60 @@ function AllListingsSection({ allProducts, loading, handleAddToCart, addedProduc
             onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.1)' }}
             onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)' }}>
             {product.image_url ? (
-              <div style={{ padding: '12px', paddingBottom: '0' }}>
-                <img src={product.image_url} alt={product.product_name} style={{ width: '100%', height: '160px', objectFit: 'cover', display: 'block', borderRadius: '8px' }} />
+              <div style={{ padding: window.innerWidth <= 768 ? '8px' : '12px', paddingBottom: '0' }}>
+                <img src={product.image_url} alt={product.product_name} style={{ width: '100%', height: window.innerWidth <= 768 ? '120px' : '160px', objectFit: 'cover', display: 'block', borderRadius: '8px' }} />
               </div>
             ) : (
-              <div style={{ height: '160px', margin: '12px', marginBottom: '0', borderRadius: '8px', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', color: '#d1d5db' }}>🛒</div>
+              <div style={{ height: window.innerWidth <= 768 ? '120px' : '160px', margin: window.innerWidth <= 768 ? '8px' : '12px', marginBottom: '0', borderRadius: '8px', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', color: '#d1d5db' }}>🛒</div>
             )}
-            <div style={{ padding: '16px', flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-              <div style={{ fontWeight: 600, fontSize: '0.95rem', color: '#111', marginBottom: '4px' }}>{product.product_name}</div>
-              <div style={{ color: '#6b7280', fontSize: '0.8rem', marginBottom: 'auto' }}>🏪 {product.vendorName}</div>
-              <div style={{ color: '#9ca3af', fontSize: '0.75rem', marginBottom: '12px' }}>{product.category}</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 700, color: '#1e3a8a', fontSize: '1.05rem' }}>₱{Number(product.price).toFixed(2)}</span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleAddToCart(product, product.vendorName); }}
-                  style={{ background: addedProductId === product.id ? '#059669' : '#e0f2fe', color: addedProductId === product.id ? '#fff' : '#0284c7', border: 'none', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem', transition: 'all 0.2s' }}>
-                  {addedProductId === product.id ? '✓ Added' : '+ Add'}
-                </button>
+            <div style={{ padding: window.innerWidth <= 768 ? '10px' : '16px', flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#111', marginBottom: '4px' }}>{product.product_name}</div>
+              <div style={{ color: '#6b7280', fontSize: '0.75rem', marginBottom: 'auto' }}>🏪 {product.vendorName}</div>
+              <div style={{ color: '#9ca3af', fontSize: '0.7rem', marginBottom: '8px' }}>{product.category}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <span style={{ fontWeight: 700, color: '#1e3a8a', fontSize: '1rem' }}>₱{Number(product.price).toFixed(2)} <span style={{ fontSize: '0.7rem', fontWeight: 500, color: '#6b7280' }}>/ {product.unit}</span></span>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'stretch' }}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleAddToCart(product, product.vendorName, 1); }}
+                    style={{ 
+                      flex: 1,
+                      background: addedProductId === product.id ? '#059669' : '#e0f2fe', 
+                      color: addedProductId === product.id ? '#fff' : '#0284c7', 
+                      border: 'none', 
+                      borderRadius: '6px', 
+                      padding: '6px 8px', 
+                      cursor: 'pointer', 
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      lineHeight: '1.1',
+                      transition: 'all 0.2s' 
+                    }}>
+                    <span style={{ fontSize: '1rem', fontWeight: 'bold' }}>{addedProductId === product.id ? '✓' : '+'}</span>
+                    <span style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase' }}>{addedProductId === product.id ? 'Added' : 'Add'}</span>
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onProductClick(product); }}
+                    style={{ 
+                      flex: 1,
+                      background: '#f1f5f9', 
+                      color: '#475569', 
+                      border: 'none', 
+                      borderRadius: '8px', 
+                      padding: '8px 12px', 
+                      cursor: 'pointer', 
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      lineHeight: '1.1',
+                      transition: 'all 0.2s' 
+                    }}>
+                    <span style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>⚖️</span>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase' }}>Custom</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -169,7 +219,7 @@ function AllListingsSection({ allProducts, loading, handleAddToCart, addedProduc
   )
 }
 
-export default function HomePage({ onLoginClick, onSignUpClick, currentUser, token, onGoToDashboard }) {
+export default function HomePage({ onLoginClick, onSignUpClick, onSellClick, currentUser, token, onGoToDashboard }) {
   const [vendors, setVendors] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -183,10 +233,18 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, tok
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0)
 
   const fetchVendors = () => {
-    fetch(`${API_BASE_URL}/api/public/shop`)
-      .then((r) => r.json())
+    fetch(`${API_BASE_URL}/api/public/shop`, {
+      headers: { 'Accept': 'application/json' }
+    })
+      .then((r) => {
+        if (!r.ok) throw new Error('Failed to fetch')
+        return r.json()
+      })
       .then((d) => setVendors(Array.isArray(d) ? d : []))
-      .catch(() => setVendors([]))
+      .catch((err) => {
+        console.error('Market fetch error:', err)
+        setVendors([])
+      })
       .finally(() => setLoading(false))
   }
 
@@ -242,27 +300,31 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, tok
   useEffect(() => {
     setCartCount(getCartCount())
   }, [currentUser])
+  
   const [selectedProductForModal, setSelectedProductForModal] = useState(null)
+  const [quantities, setQuantities] = useState({})
 
-  const handleAddToCart = (product, vendorName) => {
+  const handleAddToCart = (product, vendorName, providedQty = null) => {
     if (!currentUser || currentUser.role !== 'shopper') {
       setShowLoginPrompt(true)
-      return
+      return false
     }
     // Add to localStorage cart so ShopperDashboard picks it up (per-user key)
+    const addQty = providedQty !== null ? parseFloat(providedQty) : (parseFloat(quantities[product.id]) || 1);
     const key = `mercago_cart_${currentUser.id}`
     const cart = (() => { try { return JSON.parse(localStorage.getItem(key) || '[]') } catch { return [] } })()
     const existing = cart.find((i) => i.product.id === product.id)
     let updatedCart
     if (existing) {
-      updatedCart = cart.map((i) => i.product.id === product.id ? { ...i, quantity: i.quantity + 1 } : i)
+      updatedCart = cart.map((i) => i.product.id === product.id ? { ...i, quantity: i.quantity + addQty } : i)
     } else {
-      updatedCart = [...cart, { product: { ...product, vendorName }, quantity: 1 }]
+      updatedCart = [...cart, { product: { ...product, vendorName }, quantity: addQty }]
     }
     localStorage.setItem(key, JSON.stringify(updatedCart))
     setCartCount(updatedCart.reduce((sum, item) => sum + (item.quantity || 0), 0))
     setAddedProductId(product.id)
     setTimeout(() => setAddedProductId(null), 1500)
+    return true
   }
 
   // Header cart icon — just navigates to the cart tab
@@ -279,31 +341,46 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, tok
     <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: 'Inter, system-ui, sans-serif' }}>
 
       {/* ── Header Area ── */}
-      <header style={{ background: '#ffffff', borderBottom: '1px solid #e2e8f0', padding: '16px 48px' }}>
+      <header style={{ 
+        background: '#ffffff', 
+        borderBottom: '1px solid #e2e8f0', 
+        padding: window.innerWidth <= 768 ? '12px 16px' : '16px 48px',
+        position: 'sticky',
+        top: 0,
+        zIndex: 100
+      }}>
 
         {/* Top utility row */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '8px' }}>
-          <button style={{ background: '#3b82f6', color: '#fff', fontSize: '0.75rem', fontWeight: 600, padding: '4px 12px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>SELL ON MERCAGO</button>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginBottom: '8px', flexWrap: 'wrap' }}>
+          <button onClick={onSellClick} style={{ background: '#3b82f6', color: '#fff', fontSize: '0.7rem', fontWeight: 600, padding: '4px 10px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>SELL</button>
           {!currentUser && (
             <>
-              <button onClick={onLoginClick} style={{ background: '#fff', color: '#3b82f6', border: '1px solid #3b82f6', fontSize: '0.75rem', fontWeight: 600, padding: '4px 16px', borderRadius: '4px', cursor: 'pointer' }}>LOGIN</button>
-              <button onClick={onSignUpClick} style={{ background: '#60a5fa', color: '#fff', fontSize: '0.75rem', fontWeight: 600, padding: '4px 16px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>SIGN UP</button>
+              <button onClick={onLoginClick} style={{ background: '#fff', color: '#3b82f6', border: '1px solid #3b82f6', fontSize: '0.7rem', fontWeight: 600, padding: '4px 12px', borderRadius: '4px', cursor: 'pointer' }}>LOGIN</button>
+              <button onClick={onSignUpClick} style={{ background: '#60a5fa', color: '#fff', fontSize: '0.7rem', fontWeight: 600, padding: '4px 12px', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>JOIN</button>
             </>
           )}
         </div>
 
         {/* Main Header row */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
 
           {/* Logo */}
           <div style={{ cursor: 'pointer', flexShrink: 0 }} onClick={() => { setSelectedCategory(null); setSelectedVendorId(null); }}>
-            <span style={{ fontSize: '2rem', fontWeight: 800, color: '#2563eb', letterSpacing: '-0.5px' }}>
+            <span style={{ fontSize: window.innerWidth <= 768 ? '1.5rem' : '2rem', fontWeight: 800, color: '#2563eb', letterSpacing: '-0.5px' }}>
               MercaGO
             </span>
           </div>
 
-          {/* Search Bar - Centered */}
-          <div style={{ flex: 1, maxWidth: '500px', display: 'flex', gap: '0' }}>
+          {/* Search Bar - Responsive */}
+          <div style={{ 
+            flex: 1, 
+            maxWidth: '500px', 
+            display: 'flex', 
+            gap: '0', 
+            order: window.innerWidth <= 768 ? 3 : 'unset',
+            width: window.innerWidth <= 768 ? '100%' : 'auto',
+            minWidth: window.innerWidth <= 768 ? '100%' : '300px'
+          }}>
             <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
               <input
                 type="text"
@@ -322,11 +399,28 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, tok
           </div>
 
           {/* Cart & User */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: window.innerWidth <= 768 ? '0.75rem' : '1.5rem', flexShrink: 0 }}>
             <button onClick={handleOpenCart} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, position: 'relative' }}>
-              <svg style={{ width: '30px', fill: 'none', stroke: '#374151', strokeWidth: 3, strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+              <svg style={{ width: window.innerWidth <= 768 ? '24px' : '30px', fill: 'none', stroke: '#374151', strokeWidth: 3, strokeLinecap: 'round', strokeLinejoin: 'round' }} viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
               {cartCount > 0 && (
-                <span style={{ position: 'absolute', top: '-8px', right: '-25px', background: '#ef4444', color: '#fff', fontSize: '0.65rem', fontWeight: 700, minWidth: '18px', height: '18px', borderRadius: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', boxShadow: '0 2px 4px rgba(239,68,68,0.4)', lineHeight: 1 }}>
+                <span style={{ 
+                  position: 'absolute', 
+                  top: '-8px', 
+                  right: window.innerWidth <= 768 ? '-10px' : '-25px', 
+                  background: '#ef4444', 
+                  color: '#fff', 
+                  fontSize: '0.65rem', 
+                  fontWeight: 700, 
+                  minWidth: '18px', 
+                  height: '18px', 
+                  borderRadius: '9px', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  padding: '0 4px', 
+                  boxShadow: '0 2px 4px rgba(239,68,68,0.4)', 
+                  lineHeight: 1 
+                }}>
                   {cartCount > 99 ? '99+' : cartCount}
                 </span>
               )}
@@ -353,7 +447,7 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, tok
 
       {/* ── Login Prompt Modal ── */}
       {showLoginPrompt && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
           <div style={{ background: '#fff', borderRadius: 12, padding: '2rem', maxWidth: 420, width: '90%', textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
             <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🛒</div>
             <h2 style={{ margin: '0 0 0.5rem', color: '#1e3a8a' }}>Account Required</h2>
@@ -392,7 +486,7 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, tok
                 {vendor.banner_url && (
                   <div style={{ marginBottom: '2rem', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', background: '#fff' }}>
                     <img
-                      src={`${API_BASE_URL}${vendor.banner_url}`}
+                      src={vendor.banner_url?.startsWith('http') ? vendor.banner_url : `${API_BASE_URL}${vendor.banner_url}`}
                       alt={`${vendor.vendor_name} Banner`}
                       style={{ width: '100%', height: '300px', objectFit: 'cover', display: 'block' }}
                     />
@@ -419,6 +513,8 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, tok
                   addedProductId={addedProductId}
                   CATEGORIES={Array.from(new Set(vendorProducts.map(p => p.category).filter(Boolean)))}
                   onProductClick={(product) => setSelectedProductForModal(product)}
+                  quantities={quantities}
+                  setQuantities={setQuantities}
                 />
               </>
             )
@@ -430,10 +526,10 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, tok
               const bannerVendors = vendors.filter(v => v.banner_url)
               if (bannerVendors.length === 0) {
                 return (
-                  <div style={{ marginBottom: '3rem', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', background: 'linear-gradient(to right, #1e3a8a, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center', height: '300px' }}>
+                  <div style={{ marginBottom: '3rem', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', background: 'linear-gradient(to right, #1e3a8a, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center', height: window.innerWidth <= 768 ? '200px' : '300px' }}>
                     <div style={{ textAlign: 'center', color: '#fff', padding: '0 20px' }}>
-                      <h1 style={{ fontSize: '2.5rem', marginBottom: '1rem', fontWeight: 800 }}>Welcome to MercaGO</h1>
-                      <p style={{ fontSize: '1.2rem', color: '#bfdbfe', margin: 0 }}>Fresh marketplace goods delivered right to your door.</p>
+                      <h1 style={{ fontSize: window.innerWidth <= 768 ? '1.5rem' : '2.5rem', marginBottom: '0.5rem', fontWeight: 800 }}>Welcome to MercaGO</h1>
+                      <p style={{ fontSize: window.innerWidth <= 768 ? '0.9rem' : '1.2rem', color: '#bfdbfe', margin: 0 }}>Fresh marketplace goods delivered right to your door.</p>
                     </div>
                   </div>
                 )
@@ -450,7 +546,7 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, tok
                     {bannerVendors.map(vendor => (
                       <div key={vendor.vendor_id} style={{ width: `${100 / bannerVendors.length}%`, flexShrink: 0 }}>
                         <img
-                          src={`${API_BASE_URL}${vendor.banner_url}`}
+                          src={vendor.banner_url?.startsWith('http') ? vendor.banner_url : `${API_BASE_URL}${vendor.banner_url}`}
                           alt={`${vendor.vendor_name} Banner`}
                           onClick={() => setSelectedVendorId(vendor.vendor_id)}
                           style={{ width: '100%', height: '300px', objectFit: 'cover', display: 'block', cursor: 'pointer' }}
@@ -496,6 +592,70 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, tok
               )
             })()}
 
+            {/* ── ⚡ Bagsak Presyo (Flash Sales) ── */}
+            {(() => {
+              const now = Date.now()
+              const flashProducts = vendors.flatMap(v =>
+                v.products
+                  .filter(p => p.flash_active && p.flash_expires_at && new Date(p.flash_expires_at).getTime() > now)
+                  .map(p => ({ ...p, vendorName: v.vendor_name, vendorId: v.vendor_id }))
+              )
+              if (flashProducts.length === 0) return null
+              return (
+                <div style={{ marginBottom: '2.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: '1rem' }}>
+                    <span style={{ fontSize: '1.6rem' }}>⚡</span>
+                    <h2 style={{ margin: 0, fontSize: '1.4rem', color: '#dc2626', fontWeight: 900 }}>Bagsak Presyo</h2>
+                    <span style={{ background: '#dc2626', color: '#fff', fontSize: '0.7rem', fontWeight: 800, padding: '3px 8px', borderRadius: 20, letterSpacing: 1 }}>FLASH SALE</span>
+                  </div>
+                  <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: window.innerWidth <= 768 ? 'repeat(auto-fill, minmax(140px, 1fr))' : 'repeat(auto-fill, minmax(200px, 1fr))', 
+                    gap: window.innerWidth <= 768 ? '8px' : '12px' 
+                  }}>
+                    {flashProducts.map(product => {
+                      const expiresMs = new Date(product.flash_expires_at).getTime() - now
+                      const expiresHr = Math.floor(expiresMs / 3600000)
+                      const expiresMn = Math.floor((expiresMs % 3600000) / 60000)
+                      const expiresSc = Math.floor((expiresMs % 60000) / 1000)
+                      const countdownStr = expiresHr > 0
+                        ? `${expiresHr}h ${expiresMn}m`
+                        : `${expiresMn}m ${expiresSc}s`
+                      return (
+                        <div key={product.id} style={{
+                          background: '#fff', border: '2px solid #fca5a5', borderRadius: 12,
+                          overflow: 'hidden', boxShadow: '0 4px 12px rgba(220,38,38,0.1)',
+                          cursor: 'pointer', transition: 'transform 0.2s',
+                        }}
+                          onClick={() => { setSelectedProductForModal({ ...product, vendorName: product.vendorName }) }}
+                          onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-3px)'}
+                          onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                        >
+                          {product.image_url && (
+                            <img src={product.image_url} alt={product.product_name}
+                              style={{ width: '100%', height: 120, objectFit: 'cover' }} />
+                          )}
+                          <div style={{ padding: '10px 12px' }}>
+                            <p style={{ margin: '0 0 4px', fontWeight: 700, fontSize: '0.9rem', color: '#111' }}>{product.product_name}</p>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ fontWeight: 900, color: '#dc2626', fontSize: '1.1rem' }}>₱{Number(product.flash_price).toFixed(2)}</span>
+                              <span style={{ textDecoration: 'line-through', color: '#9ca3af', fontSize: '0.8rem' }}>₱{Number(product.price).toFixed(2)}</span>
+                            </div>
+                            <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontSize: '0.7rem', color: '#dc2626', fontWeight: 700, background: '#fef2f2', padding: '2px 6px', borderRadius: 6 }}>
+                                ⏱ {countdownStr}
+                              </span>
+                              <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>{product.vendorName}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
+
             {/* ── All Listings ── */}
             <AllListingsSection
               allProducts={allProducts}
@@ -504,6 +664,8 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, tok
               addedProductId={addedProductId}
               CATEGORIES={globalCategories}
               onProductClick={(product) => setSelectedProductForModal(product)}
+              quantities={quantities}
+              setQuantities={setQuantities}
             />
           </>
         ) : (
@@ -536,7 +698,11 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, tok
                     <h3 style={{ borderBottom: '2px solid #e5e7eb', paddingBottom: '0.5rem', marginBottom: '1rem', color: '#374151', fontSize: '1rem' }}>
                       🏪 {vendor.vendor_name}
                     </h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
+                    <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: window.innerWidth <= 768 ? 'repeat(auto-fill, minmax(150px, 1fr))' : 'repeat(auto-fill, minmax(220px, 1fr))', 
+        gap: window.innerWidth <= 768 ? '10px' : '16px' 
+      }}>
                       {vendorFiltered.map((product) => (
                         <div key={product.id} style={{ background: '#fff', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', transition: 'transform 0.2s, box-shadow 0.2s', border: '1px solid #f3f4f6', cursor: 'pointer' }}
                           onClick={() => setSelectedProductForModal({ ...product, vendorName: vendor.vendor_name })}
@@ -554,11 +720,48 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, tok
                             <div style={{ color: '#6b7280', fontSize: '0.8rem', marginBottom: 'auto' }}>{product.category}</div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
                               <span style={{ fontWeight: 700, color: '#1e3a8a', fontSize: '1.05rem' }}>₱{Number(product.price).toFixed(2)} <span style={{ fontSize: '0.78rem', fontWeight: 500, color: '#6b7280' }}>/ {product.unit}</span></span>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleAddToCart(product, vendor.vendor_name); }}
-                                style={{ background: addedProductId === product.id ? '#059669' : '#e0f2fe', color: addedProductId === product.id ? '#fff' : '#0284c7', border: 'none', borderRadius: '6px', padding: '6px 12px', fontWeight: 600, cursor: 'pointer', fontSize: '0.8rem', transition: 'all 0.2s' }}>
-                                {addedProductId === product.id ? '✓ Added' : '+ Add'}
-                              </button>
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'stretch' }}>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleAddToCart(product, vendor.vendor_name, 1); }}
+                                  style={{ 
+                                    flex: 1,
+                                    background: addedProductId === product.id ? '#059669' : '#e0f2fe', 
+                                    color: addedProductId === product.id ? '#fff' : '#0284c7', 
+                                    border: 'none', 
+                                    borderRadius: '8px', 
+                                    padding: '8px 12px', 
+                                    cursor: 'pointer', 
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    lineHeight: '1.1',
+                                    transition: 'all 0.2s' 
+                                  }}>
+                                  <span style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{addedProductId === product.id ? '✓' : '+'}</span>
+                                  <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase' }}>{addedProductId === product.id ? 'Added' : 'Add'}</span>
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setSelectedProductForModal({ ...product, vendorName: vendor.vendor_name }); }}
+                                  style={{ 
+                                    flex: 1,
+                                    background: '#f1f5f9', 
+                                    color: '#475569', 
+                                    border: 'none', 
+                                    borderRadius: '8px', 
+                                    padding: '8px 12px', 
+                                    cursor: 'pointer', 
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    lineHeight: '1.1',
+                                    transition: 'all 0.2s' 
+                                  }}>
+                                  <span style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>⚖️</span>
+                                  <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase' }}>Custom</span>
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -578,7 +781,7 @@ export default function HomePage({ onLoginClick, onSignUpClick, currentUser, tok
           API_BASE_URL={API_BASE_URL}
           currentUser={currentUser}
           onClose={() => setSelectedProductForModal(null)}
-          onAddToCart={(product) => handleAddToCart(product, product.vendorName)}
+          onAddToCart={(product, qty) => { return handleAddToCart(product, product.vendorName, qty); }}
           onReviewSubmitted={fetchVendors}
         />
       )}

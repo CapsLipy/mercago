@@ -53,10 +53,14 @@ function VendorAnalytics({ vendorOrders }) {
   const [calRangeEnd, setCalRangeEnd] = useState(null)
   const [calMode, setCalMode] = useState('single') // 'single' | 'range'
 
-  // Helper: check if a date string falls within a date range
   const isInRange = (dateStr, startDate, endDate) => {
-    const d = new Date(dateStr.split(' ')[0])
-    return d >= startDate && d <= endDate
+    if (!dateStr) return false
+    try {
+      const d = new Date(dateStr.split(' ')[0])
+      return d >= startDate && d <= endDate
+    } catch {
+      return false
+    }
   }
 
   // Current period date boundaries
@@ -492,11 +496,17 @@ function VendorAnalytics({ vendorOrders }) {
       </div>
 
       {/* Summary Cards */}
-      <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '32px' }}>
+      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '32px' }}>
         {stats.map((s, i) => {
           const isUp = s.change >= 0
           return (
-            <div key={i} style={{ flex: '1 1 200px', background: '#f3f4f6', padding: '20px', borderRadius: '8px', borderLeft: `4px solid ${s.color}` }}>
+            <div key={i} style={{ 
+              flex: window.innerWidth <= 768 ? '1 1 calc(50% - 6px)' : '1 1 200px', 
+              background: '#f3f4f6', 
+              padding: window.innerWidth <= 768 ? '14px' : '20px', 
+              borderRadius: '8px', 
+              borderLeft: `4px solid ${s.color}` 
+            }}>
               <div style={{ color: '#6b7280', fontSize: '0.85rem', fontWeight: 600, textTransform: 'uppercase' }}>{s.label}</div>
               <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#111', marginTop: '8px' }}>{s.value}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '6px' }}>
@@ -925,81 +935,6 @@ function VendorAnalytics({ vendorOrders }) {
           </div>
         )}
       </div>
-
-    {/* ── Activity Log ── */}
-    <div style={{ background: '#fff', padding: '24px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', marginTop: '24px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#111' }}>🕑 Activity Log</h3>
-        <span style={{ fontSize: '0.78rem', color: '#94a3b8', background: '#f1f5f9', padding: '4px 10px', borderRadius: '12px' }}>
-          System-generated · {vendorOrders.length} events
-        </span>
-      </div>
-
-      {vendorOrders.length === 0 ? (
-        <p style={{ color: '#9ca3af', textAlign: 'center', padding: '24px 0', margin: 0 }}>No activity yet.</p>
-      ) : (
-        <div style={{ maxHeight: '360px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          {/* One log entry per order, sorted newest-first, max 50 */}
-          {[...vendorOrders]
-            .sort((a, b) => new Date(b.ordered_at) - new Date(a.ordered_at))
-            .slice(0, 50)
-            .map((o, idx) => {
-              // Map delivery_status → icon + label + color
-              const statusMap = {
-                finding_rider: { icon: '🔍', label: 'Finding Rider', color: '#f59e0b', bg: '#fffbeb' },
-                found_rider:   { icon: '🏍️', label: 'Rider Found',   color: '#3b82f6', bg: '#eff6ff' },
-                ongoing:       { icon: '🚴', label: 'On the Way',    color: '#8b5cf6', bg: '#f5f3ff' },
-                delivered:     { icon: '✅', label: 'Delivered',     color: '#10b981', bg: '#ecfdf5' },
-                cancelled:     { icon: '❌', label: 'Cancelled',     color: '#ef4444', bg: '#fef2f2' },
-              }
-              const s = statusMap[o.delivery_status] || { icon: '📋', label: o.delivery_status, color: '#6b7280', bg: '#f9fafb' }
-              const itemSummary = o.items.map(i => `${i.product_name} ×${i.quantity}`).join(', ')
-
-              return (
-                <div
-                  key={o.order_id + idx}
-                  style={{
-                    display: 'flex', alignItems: 'flex-start', gap: '12px',
-                    padding: '10px 12px', borderRadius: '8px',
-                    background: idx % 2 === 0 ? '#fafafa' : '#fff',
-                    border: '1px solid #f1f5f9',
-                    transition: 'background 0.15s',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
-                  onMouseLeave={e => e.currentTarget.style.background = idx % 2 === 0 ? '#fafafa' : '#fff'}
-                >
-                  {/* Status icon bubble */}
-                  <div style={{ flexShrink: 0, width: 36, height: 36, borderRadius: '50%', background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', border: `1px solid ${s.color}22` }}>
-                    {s.icon}
-                  </div>
-
-                  {/* Event description */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#111', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      🛒 Order from <span style={{ color: '#3b82f6' }}>{o.shopper_name}</span>
-                      <span style={{ fontWeight: 400, color: '#6b7280' }}> — </span>
-                      <span style={{ color: '#059669', fontWeight: 700 }}>₱{Number(o.total_amount).toFixed(2)}</span>
-                    </div>
-                    <div style={{ fontSize: '0.775rem', color: '#6b7280', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {itemSummary}
-                    </div>
-                  </div>
-
-                  {/* Status badge + timestamp */}
-                  <div style={{ flexShrink: 0, textAlign: 'right' }}>
-                    <div style={{ fontSize: '0.72rem', fontWeight: 700, color: s.color, background: s.bg, padding: '2px 8px', borderRadius: '10px', border: `1px solid ${s.color}33`, whiteSpace: 'nowrap' }}>
-                      {s.label}
-                    </div>
-                    <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: '4px', whiteSpace: 'nowrap' }}>
-                      {o.ordered_at}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-        </div>
-      )}
-    </div>
     </>
   )
 }
@@ -1033,6 +968,10 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
   const [myReviews, setMyReviews] = useState([])
   const [myAvgRating, setMyAvgRating] = useState(0)
 
+  // Activity Logs State
+  const [activityLogs, setActivityLogs] = useState([])
+  const [activityLogsLoading, setActivityLogsLoading] = useState(false)
+
   const authHeaders = {
     Authorization: `Bearer ${token}`,
     Accept: 'application/json',
@@ -1042,12 +981,26 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
     if (!token) return
     setProductsLoading(true); setProductError('')
     try {
-      const res = await fetch(`${API_BASE_URL}/api/products`, { headers: authHeaders })
-      if (!res.ok) { setProductError(await extractError(res)); if (res.status === 401) onLogout(); return }
+      const res = await fetch(`${API_BASE_URL}/api/products`, { 
+        headers: {
+          ...authHeaders,
+          'Accept': 'application/json'
+        }
+      })
+      if (!res.ok) { 
+        const error = await extractError(res)
+        setProductError(error)
+        if (res.status === 401) onLogout()
+        return 
+      }
       const d = await res.json()
       setProducts(Array.isArray(d) ? d : d?.data ?? [])
-    } catch { setProductError('Unable to load products.') }
-    finally { setProductsLoading(false) }
+    } catch (err) { 
+      console.error('Fetch products error:', err)
+      setProductError('Unable to load products.') 
+    } finally { 
+      setProductsLoading(false) 
+    }
   }
 
   const fetchVendorOrders = async () => {
@@ -1058,6 +1011,38 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
       const d = await res.json()
       setVendorOrders(Array.isArray(d) ? d : [])
     } catch { /* silent */ }
+  }
+
+  const handleMarkReady = async (orderId) => {
+    if (!token) return
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/orders/${orderId}/ready`, { method: 'POST', headers: authHeaders })
+      if (res.ok) await fetchVendorOrders()
+    } catch { /* silent */ }
+  }
+
+  // ── Flash Sale ──────────────────────────────────────────────────────────────
+  const [flashSaleProductId, setFlashSaleProductId] = useState(null)
+  const [flashSaleForm, setFlashSaleForm] = useState({ flash_price: '', flash_expires_at: '' })
+  const [flashSaleLoading, setFlashSaleLoading] = useState(false)
+  const [flashSaleMsg, setFlashSaleMsg] = useState('')
+
+  const handleFlashSale = async (productId, enable) => {
+    setFlashSaleLoading(true); setFlashSaleMsg('')
+    try {
+      const body = enable
+        ? { is_flash_sale: true, flash_price: parseFloat(flashSaleForm.flash_price), flash_expires_at: flashSaleForm.flash_expires_at }
+        : { is_flash_sale: false }
+      const res = await fetch(`${API_BASE_URL}/api/products/${productId}/flash-sale`, {
+        method: 'POST', 
+        headers: { ...authHeaders, 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(body)
+      })
+      const d = await res.json()
+      setFlashSaleMsg(res.ok ? `✅ ${d.message}` : `❌ ${d.message}`)
+      if (res.ok) { setFlashSaleProductId(null); setFlashSaleForm({ flash_price: '', flash_expires_at: '' }); await fetchProducts() }
+    } catch { setFlashSaleMsg('❌ Unable to update flash sale.') }
+    finally { setFlashSaleLoading(false) }
   }
 
   const handleSaveProduct = async (e) => {
@@ -1157,25 +1142,47 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
     } catch { /* silent */ }
   }
 
+  const fetchActivityLogs = async () => {
+    if (!token) return
+    setActivityLogsLoading(true)
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/reports/activity`, { headers: authHeaders })
+      if (!res.ok) return
+      const d = await res.json()
+      setActivityLogs(Array.isArray(d) ? d : [])
+    } catch { /* silent */ }
+    finally { setActivityLogsLoading(false) }
+  }
+
   useEffect(() => {
     if (!token) return
     fetchProducts()
     fetchVendorOrders()
     fetchVendorReviews()
+    fetchActivityLogs()
   }, [token])
 
   return (
     <section>
-      <div className="dashboard-head">
+      <div className="dashboard-head" style={{ 
+        flexDirection: window.innerWidth <= 768 ? 'column' : 'row',
+        alignItems: window.innerWidth <= 768 ? 'flex-start' : 'center'
+      }}>
         <div>
           <h2>Vendor Dashboard</h2>
           <p style={{ margin: '2px 0 0', fontSize: '0.9rem', opacity: 0.7 }}>
             {user.first_name} {user.last_name} &bull; <em>vendor</em>
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          <button type="button" className="secondary-btn" onClick={() => setShowProfileModal(true)}>Edit Profile</button>
-          <button type="button" className="secondary-btn" onClick={onLogout}>Logout</button>
+        <div style={{ 
+          display: 'flex', 
+          gap: '0.5rem', 
+          alignItems: 'center', 
+          flexWrap: 'wrap',
+          marginTop: window.innerWidth <= 768 ? '10px' : '0'
+        }}>
+          <button type="button" className="secondary-btn" onClick={() => setShowProfileModal(true)} style={{ fontSize: '0.8rem', padding: '6px 12px' }}>Profile</button>
+          <button type="button" className="secondary-btn" onClick={onLogout} style={{ fontSize: '0.8rem', padding: '6px 12px' }}>Logout</button>
         </div>
       </div>
 
@@ -1194,6 +1201,7 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
         <button className={vendorTab === 'products' ? 'tab active' : 'tab'} type="button" onClick={() => setVendorTab('products')}>My Products</button>
         <button className={vendorTab === 'sales' ? 'tab active' : 'tab'} type="button" onClick={() => { setVendorTab('sales'); fetchVendorOrders() }}>Sales History</button>
         <button className={vendorTab === 'profile' ? 'tab active' : 'tab'} type="button" onClick={() => setVendorTab('profile')}>Store Profile</button>
+        <button className={vendorTab === 'activity' ? 'tab active' : 'tab'} type="button" onClick={() => { setVendorTab('activity'); fetchActivityLogs() }}>Audit Log</button>
       </div>
 
       {vendorTab === 'analytics' && (
@@ -1252,8 +1260,18 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
             <label>Product Name<input type="text" value={productForm.product_name} onChange={(e) => setProductForm((p) => ({ ...p, product_name: e.target.value }))} required /></label>
             <label>Category<input type="text" value={productForm.category} onChange={(e) => setProductForm((p) => ({ ...p, category: e.target.value }))} required /></label>
             <label>Price<input type="number" min="0" step="0.01" value={productForm.price} onChange={(e) => setProductForm((p) => ({ ...p, price: e.target.value }))} required /></label>
-            <label>Unit<input type="text" value={productForm.unit} onChange={(e) => setProductForm((p) => ({ ...p, unit: e.target.value }))} required /></label>
-            <label>Stock<input type="number" min="0" step="1" value={productForm.stock_qty} onChange={(e) => setProductForm((p) => ({ ...p, stock_qty: e.target.value }))} required /></label>
+            <label>Unit
+              <select value={productForm.unit} onChange={(e) => setProductForm((p) => ({ ...p, unit: e.target.value }))} required>
+                <option value="" disabled>Select Unit</option>
+                <option value="kg">kg</option>
+                <option value="gram">gram</option>
+                <option value="liters">liters</option>
+                <option value="ml">ml</option>
+                <option value="pieces">pieces</option>
+                <option value="packs">packs</option>
+              </select>
+            </label>
+            <label>Stock<input type="number" min="0" step="any" value={productForm.stock_qty} onChange={(e) => setProductForm((p) => ({ ...p, stock_qty: e.target.value }))} required /></label>
             <label>Product Image<input id="productImageInput" type="file" accept="image/*" onChange={(e) => setProductForm((p) => ({ ...p, image: e.target.files[0] }))} /></label>
             <div className="actions">
               <button type="submit" disabled={isSavingProduct}>{isSavingProduct ? 'Saving...' : editingProductId ? 'Update Product' : 'Create Product'}</button>
@@ -1270,7 +1288,7 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
           {!productsLoading && products.length > 0 ? (
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Image</th><th>Name</th><th>Category</th><th>Price</th><th>Unit</th><th>Stock</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Image</th><th>Name</th><th>Category</th><th>Price</th><th>Unit</th><th>Stock</th><th>⚡ Flash</th><th>Actions</th></tr></thead>
                 <tbody>
                   {products.map((p) => (
                     <tr key={p.id}>
@@ -1288,8 +1306,20 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
                           <span style={{ background: '#f0fdf4', color: '#16a34a', fontWeight: 600, fontSize: '0.75rem', padding: '3px 10px', borderRadius: '12px', whiteSpace: 'nowrap' }}>In Stock — {p.stock_qty}</span>
                         )}
                       </td>
+                      <td>
+                        {p.flash_active
+                          ? <span style={{ background: '#fef2f2', color: '#dc2626', fontWeight: 700, fontSize: '0.72rem', padding: '3px 8px', borderRadius: 10, whiteSpace: 'nowrap' }}>⚡ ₱{Number(p.flash_price).toFixed(2)}</span>
+                          : <span style={{ color: '#d1d5db', fontSize: '0.8rem' }}>—</span>
+                        }
+                      </td>
                       <td className="row-actions">
                         <button type="button" onClick={() => startEditProduct(p)}>Edit</button>
+                        <button type="button"
+                          onClick={() => { setFlashSaleProductId(flashSaleProductId === p.id ? null : p.id); setFlashSaleMsg('') }}
+                          style={{ background: p.flash_active ? '#fef2f2' : '#fff7ed', color: p.flash_active ? '#dc2626' : '#ea580c', border: `1px solid ${p.flash_active ? '#fca5a5' : '#fed7aa'}`, borderRadius: 6, padding: '4px 10px', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer' }}
+                        >
+                          {p.flash_active ? '⚡ On' : '⚡ Off'}
+                        </button>
                         <button type="button" className="danger-btn" onClick={() => handleDeleteProduct(p.id)}>Delete</button>
                       </td>
                     </tr>
@@ -1298,6 +1328,55 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
               </table>
             </div>
           ) : null}
+
+          {/* ── Flash Sale Inline Form ── */}
+          {flashSaleProductId && (() => {
+            const p = products.find(x => x.id === flashSaleProductId)
+            if (!p) return null
+            return (
+              <div style={{ border: '2px solid #fca5a5', borderRadius: 10, padding: '1rem 1.25rem', marginTop: 16, background: '#fff5f5' }}>
+                <h4 style={{ margin: '0 0 4px', color: '#dc2626' }}>⚡ Flash Sale — {p.product_name}</h4>
+                <p style={{ margin: '0 0 12px', fontSize: '0.82rem', color: '#6b7280' }}>Regular price: ₱{Number(p.price).toFixed(2)}. Set a lower flash price and an expiry time.</p>
+                {flashSaleMsg && <p style={{ margin: '0 0 8px', fontWeight: 600, color: flashSaleMsg.startsWith('✅') ? '#059669' : '#dc2626' }}>{flashSaleMsg}</p>}
+                {p.flash_active && (
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                    <button type="button" onClick={() => handleFlashSale(p.id, false)} disabled={flashSaleLoading}
+                      style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 700, cursor: 'pointer' }}>
+                      🛑 End Flash Sale
+                    </button>
+                    <button type="button" onClick={() => setFlashSaleProductId(null)}
+                      style={{ background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 8, padding: '8px 16px', fontWeight: 600, cursor: 'pointer' }}>
+                      Cancel
+                    </button>
+                  </div>
+                )}
+                <form onSubmit={e => { e.preventDefault(); handleFlashSale(p.id, true) }} style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <label style={{ flex: '1 1 140px' }}>
+                    <span style={{ display: 'block', fontWeight: 600, fontSize: '0.82rem', marginBottom: 4 }}>Flash Price (₱)</span>
+                    <input type="number" min="0" step="0.01" value={flashSaleForm.flash_price}
+                      onChange={e => setFlashSaleForm(f => ({ ...f, flash_price: e.target.value }))} required
+                      placeholder={`e.g. ${Math.round(p.price * 0.7)}`}
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', borderRadius: 8, border: '1px solid #fca5a5', fontSize: '0.9rem' }} />
+                  </label>
+                  <label style={{ flex: '1 1 200px' }}>
+                    <span style={{ display: 'block', fontWeight: 600, fontSize: '0.82rem', marginBottom: 4 }}>Expires At</span>
+                    <input type="datetime-local" value={flashSaleForm.flash_expires_at}
+                      onChange={e => setFlashSaleForm(f => ({ ...f, flash_expires_at: e.target.value }))} required
+                      style={{ width: '100%', boxSizing: 'border-box', padding: '8px 10px', borderRadius: 8, border: '1px solid #fca5a5', fontSize: '0.9rem' }} />
+                  </label>
+                  <button type="submit" disabled={flashSaleLoading}
+                    style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, padding: '9px 20px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    {flashSaleLoading ? 'Saving...' : '⚡ Activate Flash Sale'}
+                  </button>
+                  <button type="button" onClick={() => setFlashSaleProductId(null)}
+                    style={{ background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 8, padding: '9px 16px', fontWeight: 600, cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                </form>
+              </div>
+            )
+          })()}
+
         </>
       )}
 
@@ -1313,7 +1392,7 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
                   { key: 'finding_rider', label: 'Finding Rider' },
                   { key: 'found_rider', label: 'Found Rider' },
                   { key: 'ongoing', label: 'Ongoing' },
-                  { key: 'delivered', label: 'Delivered' },
+                  { key: 'completed', label: 'Delivered' },
                 ].map(f => (
                   <button
                     key={f.key}
@@ -1352,6 +1431,21 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                           <StatusBadge status={order.delivery_status} />
                           <span style={{ color: '#6b7280', fontSize: '0.8rem' }}>{order.ordered_at}</span>
+                          {order.delivery_status === 'found_rider' && (
+                            <button 
+                              onClick={() => handleMarkReady(order.order_id)}
+                              style={{ 
+                                marginTop: 8, background: '#10b981', color: '#fff', border: 'none', 
+                                padding: '16px 32px', borderRadius: '12px', fontSize: '1.2rem', 
+                                fontWeight: '900', cursor: 'pointer', boxShadow: '0 8px 20px rgba(16, 185, 129, 0.4)',
+                                transition: 'all 0.2s', textTransform: 'uppercase', letterSpacing: '1px'
+                              }}
+                              onMouseEnter={(e) => { e.target.style.transform = 'scale(1.05)'; e.target.style.background = '#059669' }}
+                              onMouseLeave={(e) => { e.target.style.transform = 'scale(1)'; e.target.style.background = '#10b981' }}
+                            >
+                              🚀 Ready for Pickup
+                            </button>
+                          )}
                         </div>
                       </div>
                       <div className="table-wrap">
@@ -1361,7 +1455,7 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
                             {order.items.map((item, idx) => (
                               <tr key={idx}>
                                 <td>{item.product_name}</td>
-                                <td>{item.quantity}</td>
+                                <td>{item.quantity} <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>{item.unit}</span></td>
                                 <td>₱{Number(item.unit_price).toFixed(2)}</td>
                                 <td>₱{Number(item.subtotal).toFixed(2)}</td>
                               </tr>
@@ -1406,7 +1500,11 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
             {currentUser.banner_url && (
               <div style={{ marginBottom: '1rem' }}>
                 <p style={{ fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem' }}>Current Banner:</p>
-                <img src={`${API_BASE_URL}${currentUser.banner_url}`} alt="Current Banner" style={{ width: '100%', height: 'auto', borderRadius: '8px', border: '1px solid #e2e8f0' }} />
+                <img 
+                  src={currentUser.banner_url?.startsWith('http') ? currentUser.banner_url : `${API_BASE_URL}${currentUser.banner_url}`} 
+                  alt="Current Banner" 
+                  style={{ width: '100%', height: 'auto', borderRadius: '8px', border: '1px solid #e2e8f0' }} 
+                />
               </div>
             )}
 
@@ -1453,6 +1551,54 @@ export default function VendorDashboard({ currentUser, token, onLogout }) {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {vendorTab === 'activity' && (
+        <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '1.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h3 style={{ margin: 0 }}>🔍 Audit Log</h3>
+            <button type="button" className="secondary-btn" onClick={fetchActivityLogs}>Refresh</button>
+          </div>
+          <p style={{ color: '#6b7280', fontSize: '0.85rem', marginBottom: '1rem' }}>
+            A detailed trail of <strong>your own actions</strong> on the platform — product edits, price changes, deletions. For order history, see the <strong>Sales History</strong> tab.
+          </p>
+
+          {activityLogsLoading ? (
+            <p>Loading activity logs...</p>
+          ) : activityLogs.length === 0 ? (
+            <p className="empty-note">No activity recorded yet.</p>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date & Time</th>
+                    <th>Action Type</th>
+                    <th>Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activityLogs.map((log) => (
+                    <tr key={log.id}>
+                      <td style={{ whiteSpace: 'nowrap', fontSize: '0.85rem', color: '#475569' }}>
+                        {new Date(log.created_at).toLocaleString()}
+                      </td>
+                      <td>
+                        <span style={{ 
+                          background: '#f1f5f9', color: '#334155', 
+                          padding: '4px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase' 
+                        }}>
+                          {log.action}
+                        </span>
+                      </td>
+                      <td style={{ fontSize: '0.9rem', color: '#111' }}>{log.description}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </section>

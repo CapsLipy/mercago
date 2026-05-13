@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { API_BASE_URL } from '../../config'
 import { extractError } from '../../utils/error'
 
-export default function AuthModal({ defaultTab = 'login', onLoginSuccess, onClose }) {
+export default function AuthModal({ defaultTab = 'login', defaultRole = 'shopper', onLoginSuccess, onClose }) {
   const [activeTab, setActiveTab] = useState(defaultTab)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -11,7 +11,7 @@ export default function AuthModal({ defaultTab = 'login', onLoginSuccess, onClos
   const [registerForm, setRegisterForm] = useState({
     first_name: '', middle_name: '', last_name: '',
     email: '', password: '', contact_no: '',
-    age: '', sex: 'Male', address: '', role: 'shopper',
+    age: '', sex: 'Male', address: '', role: defaultRole,
   })
 
   const handleLogin = async (e) => {
@@ -58,7 +58,15 @@ export default function AuthModal({ defaultTab = 'login', onLoginSuccess, onClos
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div style={{ background: '#fff', borderRadius: 14, boxShadow: '0 24px 64px rgba(0,0,0,0.25)', width: '100%', maxWidth: 460, maxHeight: '90vh', overflow: 'auto' }}>
+      <div style={{ 
+        background: '#fff', 
+        borderRadius: 14, 
+        boxShadow: '0 24px 64px rgba(0,0,0,0.25)', 
+        width: '95%', 
+        maxWidth: 460, 
+        maxHeight: '92vh', 
+        overflow: 'auto' 
+      }}>
 
         {/* Modal Header */}
         <div style={{ background: '#2563eb', padding: '1.25rem 1.5rem', borderRadius: '14px 14px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -93,18 +101,18 @@ export default function AuthModal({ defaultTab = 'login', onLoginSuccess, onClos
             </form>
           ) : (
             <form onSubmit={handleRegister} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth <= 768 ? '1fr' : '1fr 1fr', gap: 12 }}>
                 <label><span style={lbl}>First Name</span><input type="text" style={inp} value={registerForm.first_name} onChange={(e) => setRegisterForm((p) => ({ ...p, first_name: e.target.value }))} required /></label>
                 <label><span style={lbl}>Last Name</span><input type="text" style={inp} value={registerForm.last_name} onChange={(e) => setRegisterForm((p) => ({ ...p, last_name: e.target.value }))} required /></label>
               </div>
               <label><span style={lbl}>Middle Name (Optional)</span><input type="text" style={inp} value={registerForm.middle_name} onChange={(e) => setRegisterForm((p) => ({ ...p, middle_name: e.target.value }))} /></label>
               <label><span style={lbl}>Email</span><input type="email" style={inp} value={registerForm.email} onChange={(e) => setRegisterForm((p) => ({ ...p, email: e.target.value }))} required /></label>
               <label><span style={lbl}>Password</span><input type="password" style={inp} value={registerForm.password} onChange={(e) => setRegisterForm((p) => ({ ...p, password: e.target.value }))} required /></label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth <= 768 ? '1fr' : '1fr 1fr', gap: 12 }}>
                 <label><span style={lbl}>Contact No.</span><input type="text" style={inp} value={registerForm.contact_no} onChange={(e) => setRegisterForm((p) => ({ ...p, contact_no: e.target.value }))} required /></label>
                 <label><span style={lbl}>Age</span><input type="number" min="1" style={inp} value={registerForm.age} onChange={(e) => setRegisterForm((p) => ({ ...p, age: e.target.value }))} required /></label>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth <= 768 ? '1fr' : '1fr 1fr', gap: 12 }}>
                 <label><span style={lbl}>Sex</span>
                   <select style={inp} value={registerForm.sex} onChange={(e) => setRegisterForm((p) => ({ ...p, sex: e.target.value }))}>
                     <option>Male</option><option>Female</option><option>Other</option>

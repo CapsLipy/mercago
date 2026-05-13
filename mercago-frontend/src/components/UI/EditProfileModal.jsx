@@ -50,9 +50,19 @@ export default function EditProfileModal({ currentUser, token, API_BASE_URL, onC
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+      background: 'rgba(255, 255, 255, 0.4)', backdropFilter: 'blur(8px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
     }}>
-      <div style={{ background: '#fff', padding: '2rem', borderRadius: '12px', width: '90%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto' }}>
+      <div style={{ 
+        background: '#fff', 
+        padding: window.innerWidth <= 768 ? '1.25rem' : '2rem', 
+        borderRadius: '24px', 
+        width: '90%', 
+        maxWidth: '500px', 
+        maxHeight: '90vh', 
+        overflowY: 'auto', 
+        boxShadow: '0 25px 60px rgba(0,0,0,0.1)' 
+      }}>
         <h2 style={{ marginTop: 0, marginBottom: '1.5rem', color: '#1e293b' }}>Edit Profile</h2>
         
         {error && (
@@ -62,7 +72,7 @@ export default function EditProfileModal({ currentUser, token, API_BASE_URL, onC
         )}
         
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth <= 768 ? '1fr' : '1fr 1fr', gap: '1rem' }}>
             <div>
               <label style={{ display: 'block', fontSize: '0.85rem', color: '#64748b', marginBottom: '4px' }}>First Name</label>
               <input type="text" name="first_name" value={formData.first_name} onChange={handleChange} required style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
@@ -78,7 +88,7 @@ export default function EditProfileModal({ currentUser, token, API_BASE_URL, onC
             <input type="text" name="middle_name" value={formData.middle_name} onChange={handleChange} style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: window.innerWidth <= 768 ? '1fr' : '1fr 1fr', gap: '1rem' }}>
             <div>
               <label style={{ display: 'block', fontSize: '0.85rem', color: '#64748b', marginBottom: '4px' }}>Age</label>
               <input type="number" name="age" value={formData.age} onChange={handleChange} required min="1" style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />

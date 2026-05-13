@@ -5,9 +5,9 @@ export default function OrderCard({ order, onAccept, onDecline, onComplete, show
     <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '1rem', marginBottom: '1rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem', flexWrap: 'wrap', gap: 8 }}>
         <div>
-          <strong>🛍 {order.shopper_name}</strong>
-          <p style={{ margin: '2px 0 0', fontSize: '0.85rem', color: '#6b7280' }}>📍 {order.shopper_address}</p>
-          <p style={{ margin: '2px 0 0', fontSize: '0.85rem', color: '#6b7280' }}>🏪 Vendor: {order.vendor_name}</p>
+          <strong style={{ fontSize: '1.2rem' }}>🛍 {order.shopper_name}</strong>
+          <p style={{ margin: '4px 0 0', fontSize: '1rem', color: '#6b7280' }}>📍 {order.shopper_address}</p>
+          <p style={{ margin: '2px 0 0', fontSize: '1rem', color: '#6b7280' }}>🏪 Vendor: {order.vendor_name}</p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
           <StatusBadge status={order.delivery_status} />
@@ -15,7 +15,7 @@ export default function OrderCard({ order, onAccept, onDecline, onComplete, show
         </div>
       </div>
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem', marginBottom: '0.75rem' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '1rem', marginBottom: '1rem' }}>
         <thead>
           <tr style={{ background: '#f3f4f6' }}>
             <th style={{ padding: '6px 8px', textAlign: 'left' }}>Product</th>
@@ -35,25 +35,58 @@ export default function OrderCard({ order, onAccept, onDecline, onComplete, show
       </table>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-        <strong>Total: ₱{Number(order.total_amount).toFixed(2)}</strong>
+        <strong style={{ fontSize: '1.15rem' }}>Total: ₱{Number(order.total_amount).toFixed(2)}</strong>
 
         {showActions === 'pending' && (
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ 
+            display: 'flex', 
+            gap: 12, 
+            width: window.innerWidth <= 768 ? '100%' : 'auto',
+            flexDirection: window.innerWidth <= 768 ? 'column' : 'row'
+          }}>
             <button onClick={() => onDecline(order.order_id)}
-              style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: 6, padding: '7px 16px', cursor: 'pointer', fontWeight: 600 }}>
+              style={{ 
+                background: '#ef4444', color: 'white', border: 'none', borderRadius: '10px', 
+                padding: '12px 24px', cursor: 'pointer', fontWeight: '900', fontSize: '1.1rem',
+                transition: 'transform 0.2s',
+                width: window.innerWidth <= 768 ? '100%' : 'auto'
+              }}
+              onMouseEnter={e => e.target.style.transform = 'scale(1.05)'}
+              onMouseLeave={e => e.target.style.transform = 'scale(1)'}
+            >
               ✗ Decline
             </button>
             <button onClick={() => onAccept(order.order_id)}
-              style={{ background: '#059669', color: 'white', border: 'none', borderRadius: 6, padding: '7px 16px', cursor: 'pointer', fontWeight: 600 }}>
-              ✓ Accept
+              style={{ 
+                background: '#059669', color: 'white', border: 'none', borderRadius: '10px', 
+                padding: '12px 32px', cursor: 'pointer', fontWeight: '900', fontSize: '1.1rem',
+                boxShadow: '0 4px 12px rgba(5, 150, 105, 0.3)',
+                transition: 'transform 0.2s',
+                width: window.innerWidth <= 768 ? '100%' : 'auto'
+              }}
+              onMouseEnter={e => e.target.style.transform = 'scale(1.05)'}
+              onMouseLeave={e => e.target.style.transform = 'scale(1)'}
+            >
+              ✓ Accept Order
             </button>
           </div>
         )}
 
         {showActions === 'ongoing' && (
           <button onClick={() => onComplete(order.order_id)}
-            style={{ background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem' }}>
-            ✅ Order Complete
+            style={{ 
+              background: '#2563eb', color: 'white', border: 'none', borderRadius: '12px', 
+              padding: window.innerWidth <= 768 ? '14px 24px' : '16px 32px', 
+              cursor: 'pointer', fontWeight: '900', fontSize: window.innerWidth <= 768 ? '1rem' : '1.2rem', 
+              boxShadow: '0 8px 20px rgba(37, 99, 235, 0.4)',
+              textTransform: 'uppercase', letterSpacing: '1px',
+              transition: 'all 0.2s',
+              width: window.innerWidth <= 768 ? '100%' : 'auto'
+            }}
+            onMouseEnter={e => { e.target.style.transform = 'scale(1.05)'; e.target.style.background = '#1d4ed8' }}
+            onMouseLeave={e => { e.target.style.transform = 'scale(1)'; e.target.style.background = '#2563eb' }}
+          >
+            ✅ Complete Delivery
           </button>
         )}
       </div>

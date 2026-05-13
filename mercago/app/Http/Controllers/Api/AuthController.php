@@ -7,6 +7,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Rule;
+use Cloudinary\Cloudinary;
 
 class AuthController extends Controller
 {
@@ -22,12 +24,10 @@ class AuthController extends Controller
             'age' => ['required', 'integer', 'min:1'],
             'sex' => ['required', 'string', 'max:10'],
             'address' => ['required', 'string'],
-            'role' => ['required', 'string', 'max:50'],
+            'role' => ['required', 'string', Rule::in(['shopper', 'vendor', 'rider'])],
         ]);
 
-        // Explicit bcrypt hashing for task requirement.
-        $validated['password'] = Hash::make($validated['password']);
-
+        // Password is automatically hashed by the User model's 'hashed' cast.
         $user = User::create($validated);
         $token = $user->createToken('api-token')->plainTextToken;
 
@@ -55,6 +55,13 @@ class AuthController extends Controller
 
         $token = $user->createToken('api-token')->plainTextToken;
 
+        // Log the activity
+        \App\Models\ActivityLog::create([
+            'user_id' => $user->id,
+            'action' => 'login',
+            'description' => "User {$user->first_name} {$user->last_name} logged into the system."
+        ]);
+
         return response()->json([
             'message' => 'Login successful.',
             'token' => $token,
@@ -80,8 +87,9 @@ class AuthController extends Controller
         $user = $request->user();
 
         if ($request->hasFile('banner')) {
-            $path = $request->file('banner')->store('banners', 'public');
-            $user->banner_url = '/storage/' . $path;
+            $cloudinary = new Cloudinary(config('cloudinary.cloud_url'));
+            $result = $cloudinary->uploadApi()->upload($request->file('banner')->getRealPath(), ['folder' => 'banners']);
+            $user->banner_url = $result['secure_url'];
             $user->save();
         }
 
